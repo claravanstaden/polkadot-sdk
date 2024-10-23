@@ -187,7 +187,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(origin: OriginFor<T>, message: Message) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
+			let who = ensure_signed(origin)?;
 			ensure!(!Self::operating_mode().is_halted(), Error::<T>::Halted);
 
 			// submit message to verifier for verification
@@ -228,8 +228,8 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			// Todo: Deposit fee(in Ether) to RewardLeger which should cover all of:
-			// T::RewardLeger::deposit(who, envelope.fee.into())?;
+			 T::RewardLedger::deposit(who, envelope.fee.into())?;
+			// Fee should cover all of:
 			// a. The submit extrinsic cost on BH
 			// b. The delivery cost to AH
 			// c. The execution cost on AH

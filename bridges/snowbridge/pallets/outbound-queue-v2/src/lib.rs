@@ -223,6 +223,8 @@ pub mod pallet {
 		InvalidGateway,
 		/// No pending nonce
 		PendingNonceNotExist,
+		/// Invalid Relayer Reward Account
+		InvalidRewardAccount,
 	}
 
 	/// Messages to be committed in the current block. This storage value is killed in
@@ -311,11 +313,11 @@ pub mod pallet {
 			ensure!(T::GatewayAddress::get() == envelope.gateway, Error::<T>::InvalidGateway);
 
 			let nonce = envelope.nonce;
-			ensure!(<LockedFee<T>>::contains_key(nonce), Error::<T>::PendingNonceNotExist);
 
-			// Todo: Reward relayer
-			// let locked = <LockedFee<T>>::get(nonce);
-			// T::RewardLeger::deposit(envelope.reward_address.into(), locked.fee.into())?;
+			let locked = <LockedFee<T>>::get(nonce).ok_or(Error::<T>::PendingNonceNotExist)?;
+			let reward_account =  T::AccountId::decode(&mut &envelope.reward_address[..]).map_err(|_| Error::<T>::InvalidRewardAccount)?;
+
+			T::RewardLedger::deposit(reward_account, locked.fee.into())?;
 			<LockedFee<T>>::remove(nonce);
 
 			Self::deposit_event(Event::MessageDeliveryProofReceived { nonce });
