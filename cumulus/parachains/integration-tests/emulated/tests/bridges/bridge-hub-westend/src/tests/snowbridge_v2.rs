@@ -173,12 +173,13 @@ fn claim_rewards(
 ) {
 	BridgeHubWestend::execute_with(|| {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
+		type RuntimeOrigin = <BridgeHubWestend as Chain>::RuntimeOrigin;
 
 		let relayer = BridgeHubWestendSender::get();
 		let reward_address = AssetHubWestendReceiver::get();
 		type EthereumRewards =
 		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
-		assert_ok!(EthereumRewards::deposit(relayer.into(), 2 * ETH));
+		assert_ok!(EthereumRewards::deposit(relayer.clone().into(), 2 * ETH));
 
 		// Check that the message was sent
 		assert_expected_events!(
@@ -188,8 +189,21 @@ fn claim_rewards(
 			]
 		);
 
-		type EthereumInboundQueue =
-		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumInboundQueue;
 		let message_id = H256::random();
+		let result = EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), reward_address.clone(), ETH, message_id);
+		assert_ok!(result);
+
+		let events = BridgeHubWestend::events();
+		assert!(
+			events.iter().any(|event| matches!(
+				event,
+				RuntimeEvent::EthereumRewards(snowbridge_pallet_rewards::Event::RewardClaimed { account_id, deposit_address, value, message_id })
+					if *account_id == relayer && *deposit_address == reward_address && *value == ETH,
+			)),
+			"RewardClaimed event with correct fields."
+		);
+
+		let claim_more_than_available_result = EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), reward_address.clone(), 2 * ETH, message_id);
+		assert_ok!(result);
 	});
 }
