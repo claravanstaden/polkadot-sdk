@@ -27,10 +27,12 @@ use snowbridge_router_primitives::inbound::{
 use sp_core::H256;
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
 use xcm_executor::traits::ConvertLocation;
+use snowbridge_core::rewards::RewardLedger;
 
 const INITIAL_FUND: u128 = 5_000_000_000_000;
 pub const CHAIN_ID: u64 = 11155111;
 pub const WETH: [u8; 20] = hex!("87d1f7fdfEe7f651FaBc8bFCB6E086C278b77A7d");
+pub const ETH: u128 = 1_000_000_000_000_000_000;
 const ETHEREUM_DESTINATION_ADDRESS: [u8; 20] = hex!("44a57ee2f2FCcb85FDa2B0B18EBD0D8D2333700e");
 const XCM_FEE: u128 = 100_000_000_000;
 const TOKEN_AMOUNT: u128 = 100_000_000_000;
@@ -163,5 +165,31 @@ fn send_weth_from_asset_hub_to_ethereum_by_executing_raw_xcm() {
 			)),
 			"AssetHub sovereign takes remote fee."
 		);
+	});
+}
+
+#[test]
+fn claim_rewards(
+) {
+	BridgeHubWestend::execute_with(|| {
+		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
+
+		let relayer = BridgeHubWestendSender::get();
+		let reward_address = AssetHubWestendReceiver::get();
+		type EthereumRewards =
+		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
+		assert_ok!(EthereumRewards::deposit(relayer.into(), 2 * ETH));
+
+		// Check that the message was sent
+		assert_expected_events!(
+			BridgeHubWestend,
+			vec![
+				RuntimeEvent::EthereumRewards(snowbridge_pallet_rewards::Event::RewardDeposited { .. }) => {},
+			]
+		);
+
+		type EthereumInboundQueue =
+		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumInboundQueue;
+		let message_id = H256::random();
 	});
 }

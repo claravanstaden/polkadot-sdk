@@ -53,6 +53,7 @@ use snowbridge_core::{
 	BasicOperatingMode,
 };
 use snowbridge_router_primitives_v2::inbound::Message as MessageV2;
+use snowbridge_core::rewards::RewardLedger;
 
 pub use weights::WeightInfo;
 
@@ -98,6 +99,9 @@ pub mod pallet {
 
 		#[cfg(feature = "runtime-benchmarks")]
 		type Helper: BenchmarkHelper<Self>;
+
+		/// To keep track of relayer rewards.
+		type RewardLedger: RewardLedger<Self>;
 	}
 
 	#[pallet::hooks]
