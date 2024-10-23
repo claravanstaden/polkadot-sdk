@@ -21,6 +21,8 @@ use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
 
 pub use pallet::*;
 
+pub const LOG_TARGET: &str = "xcm-rewards";
+
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 #[frame_support::pallet]
 pub mod pallet {
@@ -138,9 +140,21 @@ pub mod pallet {
 			let deposit: Asset = (reward_asset, value).into();
 			let beneficiary: Location =
 				Location::new(0, Parachain(T::AssetHubParaId::get().into()));
+			let bridge_location = Location::new(2, GlobalConsensus(T::EthereumNetwork::get()));
+
+			let xcm_fee: u128 = 10_000_000_000;
+			let asset_hub_fee_asset: Asset = (Location::parent(), xcm_fee).into();
 
 			let xcm: Xcm<()> = alloc::vec![
+				// Teleport required fees.
+				ReceiveTeleportedAsset(asset_hub_fee_asset.clone().into()),
+				// Pay for execution.
+				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
 				DepositAsset { assets: Definite(deposit.into()), beneficiary },
+				SetAppendix(Xcm(alloc::vec![
+					RefundSurplus,
+					DepositAsset { assets: AllCounted(1).into(), beneficiary: bridge_location },
+				])),
 				SetTopic(message_id.into()),
 			]
 			.into();
