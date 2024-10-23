@@ -145,11 +145,15 @@ pub mod pallet {
 			let xcm_fee: u128 = 10_000_000_000;
 			let asset_hub_fee_asset: Asset = (Location::parent(), xcm_fee).into();
 
+			// TODO burn teleported DOT
 			let xcm: Xcm<()> = alloc::vec![
 				// Teleport required fees.
 				ReceiveTeleportedAsset(asset_hub_fee_asset.clone().into()),
 				// Pay for execution.
 				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
+				DescendOrigin(PalletInstance(80).into()),
+				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
+				ReserveAssetDeposited(deposit.clone().into()),
 				DepositAsset { assets: Definite(deposit.into()), beneficiary },
 				SetAppendix(Xcm(alloc::vec![
 					RefundSurplus,
