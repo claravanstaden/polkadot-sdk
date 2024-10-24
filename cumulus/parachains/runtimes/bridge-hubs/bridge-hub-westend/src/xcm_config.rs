@@ -49,6 +49,7 @@ use xcm_builder::{
 	SiblingParachainAsNative, SiblingParachainConvertsVia, SignedAccountId32AsNative,
 	SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId,
 	UsingComponents, WeightInfoBounds, WithComputedOrigin, WithUniqueTopic,
+	XcmFeeManagerFromComponents,
 };
 use xcm_executor::{
 	traits::{FeeManager, FeeReason, FeeReason::Export},
@@ -201,9 +202,10 @@ impl xcm_executor::Config for XcmConfig {
 	type SubscriptionService = PolkadotXcm;
 	type PalletInstancesInfo = AllPalletsWithSystem;
 	type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
-	type FeeManager = XcmFeeManagerFromComponentsBridgeHub<
+	type FeeManager = XcmFeeManagerFromComponents<
 		WaivedLocations,
 		(
+			SendXcmFeeToAccount<Self::AssetTransactor, TreasuryAccount>,
 			XcmExportFeeToSibling<
 				bp_westend::Balance,
 				AccountId,
@@ -215,8 +217,11 @@ impl xcm_executor::Config for XcmConfig {
 			SendXcmFeeToAccount<Self::AssetTransactor, TreasuryAccount>,
 		),
 	>;
-	type MessageExporter =
-		(XcmOverBridgeHubRococo, crate::bridge_to_ethereum_config::SnowbridgeExporter);
+	type MessageExporter = (
+		XcmOverBridgeHubRococo,
+		crate::bridge_to_ethereum_config::SnowbridgeExporterV2,
+		crate::bridge_to_ethereum_config::SnowbridgeExporter,
+	);
 	type UniversalAliases = Nothing;
 	type CallDispatcher = RuntimeCall;
 	type SafeCallFilter = Everything;
