@@ -115,6 +115,7 @@ use frame_support::{
 use snowbridge_core::{
 	inbound::Message as DeliveryMessage,
 	outbound::v2::{CommandWrapper, Fee, GasMeter, Message},
+	rewards::RewardLedger,
 	BasicOperatingMode,
 };
 use snowbridge_merkle_tree::merkle_root;
@@ -126,10 +127,12 @@ use sp_runtime::{
 use sp_std::prelude::*;
 pub use types::{CommittedMessage, FeeWithBlockNumber, ProcessMessageOriginOf};
 pub use weights::WeightInfo;
-use snowbridge_core::rewards::RewardLedger;
+use frame_support::traits::fungible::{Inspect, Mutate};
 
 pub use pallet::*;
 
+type BalanceOf<T> =
+	<<T as pallet::Config>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -146,6 +149,8 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type Hashing: Hash<Output = H256>;
+		/// Message relayers are rewarded with this asset
+		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
 
 		type MessageQueue: EnqueueMessage<AggregateMessageOrigin>;
 
@@ -175,7 +180,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type GatewayAddress: Get<H160>;
 		/// To keep track of relayer rewards.
-		type RewardLedger: RewardLedger<Self>;
+		type RewardLedger: RewardLedger<Self::AccountId, BalanceOf<Self>>;
 	}
 
 	#[pallet::event]
@@ -225,6 +230,7 @@ pub mod pallet {
 		PendingNonceNotExist,
 		/// Invalid Relayer Reward Account
 		InvalidRewardAccount,
+		InvalidFee,
 	}
 
 	/// Messages to be committed in the current block. This storage value is killed in
@@ -315,9 +321,11 @@ pub mod pallet {
 			let nonce = envelope.nonce;
 
 			let locked = <LockedFee<T>>::get(nonce).ok_or(Error::<T>::PendingNonceNotExist)?;
-			let reward_account =  T::AccountId::decode(&mut &envelope.reward_address[..]).map_err(|_| Error::<T>::InvalidRewardAccount)?;
+			let reward_account = T::AccountId::decode(&mut &envelope.reward_address[..])
+				.map_err(|_| Error::<T>::InvalidRewardAccount)?;
 
-			T::RewardLedger::deposit(reward_account, locked.fee.into())?;
+			let amount: BalanceOf<T> = locked.fee.try_into().map_err(|_| Error::<T>::InvalidFee)?;
+			T::RewardLedger::deposit(reward_account, amount)?;
 			<LockedFee<T>>::remove(nonce);
 
 			Self::deposit_event(Event::MessageDeliveryProofReceived { nonce });

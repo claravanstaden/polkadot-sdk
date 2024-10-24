@@ -3,14 +3,12 @@
 
 use super::*;
 use crate::{
-	mock::{expect_events, new_tester, AccountId, EthereumRewards, Test, WETH},
+	mock::{expect_events, new_tester, AccountId, EthereumRewards, RuntimeOrigin, Test, WETH},
 	Event as RewardEvent,
 };
-use frame_support::assert_ok;
-use sp_keyring::AccountKeyring as Keyring;
-use crate::mock::RuntimeOrigin;
+use frame_support::{assert_err, assert_ok};
 use sp_core::H256;
-use frame_support::assert_err;
+use sp_keyring::AccountKeyring as Keyring;
 #[test]
 fn test_deposit() {
 	new_tester().execute_with(|| {
@@ -42,30 +40,45 @@ fn test_claim() {
 		let relayer: AccountId = Keyring::Bob.into();
 		let message_id = H256::random();
 
-		let result =
-			EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), relayer.clone(), 3 * WETH, message_id);
+		let result = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			relayer.clone(),
+			3 * WETH,
+			message_id,
+		);
 		// No rewards yet
 		assert_err!(result, Error::<Test>::InsufficientFunds);
 
 		// Deposit rewards
-		let result2 =
-			EthereumRewards::deposit(relayer.clone(), 3 * WETH);
+		let result2 = EthereumRewards::deposit(relayer.clone(), 3 * WETH);
 		assert_ok!(result2);
 
 		// Claim some rewards
-		let result3 =
-			EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), relayer.clone(), 2 * WETH, message_id);
+		let result3 = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			relayer.clone(),
+			2 * WETH,
+			message_id,
+		);
 		assert_ok!(result3);
 		assert_eq!(<RewardsMapping<Test>>::get(relayer.clone()), 1 * WETH);
 
 		// Claim some rewards than available
-		let result4 =
-			EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), relayer.clone(), 2 * WETH, message_id);
+		let result4 = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			relayer.clone(),
+			2 * WETH,
+			message_id,
+		);
 		assert_err!(result4, Error::<Test>::InsufficientFunds);
 
 		// Claim the remaining balance
-		let result5 =
-			EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), relayer.clone(), 1 * WETH, message_id);
+		let result5 = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			relayer.clone(),
+			1 * WETH,
+			message_id,
+		);
 		assert_ok!(result5);
 		assert_eq!(<RewardsMapping<Test>>::get(relayer.clone()), 0);
 	});

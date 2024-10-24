@@ -48,12 +48,13 @@ use xcm::{
 	VersionedXcm, MAX_XCM_DECODE_DEPTH,
 };
 
+use frame_support::traits::fungible::{Inspect, Mutate};
 use snowbridge_core::{
 	inbound::{Message, VerificationError, Verifier},
+	rewards::RewardLedger,
 	BasicOperatingMode,
 };
 use snowbridge_router_primitives_v2::inbound::Message as MessageV2;
-use snowbridge_core::rewards::RewardLedger;
 
 pub use weights::WeightInfo;
 
@@ -61,6 +62,9 @@ pub use weights::WeightInfo;
 use snowbridge_beacon_primitives::BeaconHeader;
 
 pub use pallet::*;
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type BalanceOf<T> =
+	<<T as pallet::Config>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 pub const LOG_TARGET: &str = "snowbridge-inbound-queue:v2";
 
@@ -71,7 +75,6 @@ pub mod pallet {
 
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_core::H256;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -87,6 +90,8 @@ pub mod pallet {
 
 		/// The verifier for inbound messages from Ethereum
 		type Verifier: Verifier;
+		/// Message relayers are rewarded with this asset
+		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
 
 		/// XCM message sender
 		type XcmSender: SendXcm;
@@ -101,7 +106,7 @@ pub mod pallet {
 		type Helper: BenchmarkHelper<Self>;
 
 		/// To keep track of relayer rewards.
-		type RewardLedger: RewardLedger<Self>;
+		type RewardLedger: RewardLedger<Self::AccountId, BalanceOf<Self>>;
 	}
 
 	#[pallet::hooks]
@@ -143,6 +148,7 @@ pub mod pallet {
 		Verification(VerificationError),
 		/// XCMP send failure
 		Send(SendError),
+		InvalidFee,
 	}
 
 	#[derive(Clone, Encode, Decode, Eq, PartialEq, Debug, TypeInfo, PalletError)]
@@ -228,7 +234,8 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			 T::RewardLedger::deposit(who, envelope.fee.into())?;
+			let fee: BalanceOf<T> = envelope.fee.try_into().map_err(|_| <Error<T>>::InvalidFee)?;
+			T::RewardLedger::deposit(who, fee)?;
 			// Fee should cover all of:
 			// a. The submit extrinsic cost on BH
 			// b. The delivery cost to AH

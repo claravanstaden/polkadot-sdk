@@ -14,7 +14,7 @@ use sp_core::{Get, RuntimeDebug, H160, H256};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{traits::MaybeEquivalence, MultiAddress};
 use sp_std::prelude::*;
-use xcm::prelude::{Junction::AccountKey20, *};
+use xcm::prelude::*;
 use xcm_executor::traits::ConvertLocation;
 
 const MINIMUM_DEPOSIT: u128 = 1;

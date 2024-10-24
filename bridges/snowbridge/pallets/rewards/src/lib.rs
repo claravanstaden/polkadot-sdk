@@ -12,18 +12,23 @@ mod tests;
 
 extern crate alloc;
 
-use frame_support::PalletError;
+use frame_support::{
+	sp_runtime::Saturating,
+	traits::fungible::{Inspect, Mutate},
+	PalletError,
+};
 use frame_system::pallet_prelude::*;
+pub use pallet::*;
 use snowbridge_core::rewards::RewardLedger;
 use sp_core::H160;
 pub use weights::WeightInfo;
 use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
-
-pub use pallet::*;
-
-pub const LOG_TARGET: &str = "xcm-rewards";
+use xcm_executor::traits::TransactAsset;
+pub const LOG_TARGET: &str = "rewards";
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type BalanceOf<T> =
+	<<T as pallet::Config>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -41,6 +46,10 @@ pub mod pallet {
 		type WethAddress: Get<H160>;
 		/// XCM message sender
 		type XcmSender: SendXcm;
+		/// To withdraw and deposit an asset.
+		type AssetTransactor: TransactAsset;
+		/// Message relayers are rewarded with this asset
+		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
 		type WeightInfo: WeightInfo;
 	}
 
@@ -52,7 +61,7 @@ pub mod pallet {
 			/// The relayer account to which the reward was deposited.
 			account_id: AccountIdOf<T>,
 			/// The reward value.
-			value: u128,
+			value: BalanceOf<T>,
 		},
 		RewardClaimed {
 			/// The relayer account that claimed the reward.
@@ -60,7 +69,7 @@ pub mod pallet {
 			/// The address that received the reward on AH.
 			deposit_address: AccountIdOf<T>,
 			/// The claimed reward value.
-			value: u128,
+			value: BalanceOf<T>,
 			/// The message ID that was provided, used to track the claim
 			message_id: H256,
 		},
@@ -72,6 +81,7 @@ pub mod pallet {
 		Send(SendError),
 		/// The relayer rewards balance is lower than the claimed amount.
 		InsufficientFunds,
+		InvalidAmount,
 	}
 
 	#[derive(Clone, Encode, Decode, Eq, PartialEq, Debug, TypeInfo, PalletError)]
@@ -102,7 +112,8 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub type RewardsMapping<T: Config> = StorageMap<_, Identity, AccountIdOf<T>, u128, ValueQuery>;
+	pub type RewardsMapping<T: Config> =
+		StorageMap<_, Identity, AccountIdOf<T>, BalanceOf<T>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -111,7 +122,7 @@ pub mod pallet {
 		pub fn claim(
 			origin: OriginFor<T>,
 			deposit_address: AccountIdOf<T>,
-			value: u128,
+			value: BalanceOf<T>,
 			message_id: H256,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
@@ -124,7 +135,7 @@ pub mod pallet {
 		fn process_claim(
 			account_id: AccountIdOf<T>,
 			deposit_address: AccountIdOf<T>,
-			value: u128,
+			value: BalanceOf<T>,
 			message_id: H256,
 		) -> DispatchResult {
 			// Check if the claim value is equal to or less than the accumulated balance.
@@ -137,7 +148,9 @@ pub mod pallet {
 				T::EthereumNetwork::get(),
 				T::WethAddress::get(),
 			);
-			let deposit: Asset = (reward_asset, value).into();
+			let cost2: u128 =
+				TryInto::<u128>::try_into(value).map_err(|_| Error::<T>::InvalidAmount)?;
+			let deposit: Asset = (reward_asset, cost2).into();
 			let beneficiary: Location =
 				Location::new(0, Parachain(T::AssetHubParaId::get().into()));
 			let bridge_location = Location::new(2, GlobalConsensus(T::EthereumNetwork::get()));
@@ -181,8 +194,8 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> RewardLedger<T> for Pallet<T> {
-		fn deposit(account_id: AccountIdOf<T>, value: u128) -> DispatchResult {
+	impl<T: Config> RewardLedger<AccountIdOf<T>, BalanceOf<T>> for Pallet<T> {
+		fn deposit(account_id: AccountIdOf<T>, value: BalanceOf<T>) -> DispatchResult {
 			RewardsMapping::<T>::mutate(account_id.clone(), |current_value| {
 				*current_value = current_value.saturating_add(value);
 			});
