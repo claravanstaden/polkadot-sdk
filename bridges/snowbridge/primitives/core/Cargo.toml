@@ -16,6 +16,7 @@ serde = { optional = true, features = ["alloc", "derive"], workspace = true }
 codec = { workspace = true }
 scale-info = { features = ["derive"], workspace = true }
 hex-literal = { workspace = true, default-features = true }
+log = { workspace = true }
 
 polkadot-parachain-primitives = { workspace = true }
 xcm = { workspace = true }
@@ -32,10 +33,10 @@ sp-arithmetic = { workspace = true }
 snowbridge-beacon-primitives = { workspace = true }
 
 ethabi = { workspace = true }
+xcm-executor = { workspace = true, default-features = false }
 
 [dev-dependencies]
 hex = { workspace = true, default-features = true }
-xcm-executor = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]
@@ -44,6 +45,7 @@ std = [
 	"ethabi/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 	"polkadot-parachain-primitives/std",
 	"scale-info/std",
 	"serde/std",
@@ -55,6 +57,7 @@ std = [
 	"sp-std/std",
 	"xcm-builder/std",
 	"xcm/std",
+	"xcm-executor/std",
 ]
 serde = ["dep:serde", "scale-info/serde"]
 runtime-benchmarks = [

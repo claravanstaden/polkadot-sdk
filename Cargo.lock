@@ -20894,6 +20894,7 @@ dependencies = [
  "frame-system",
  "hex",
  "hex-literal",
+ "log",
  "parity-scale-codec",
  "polkadot-parachain-primitives",
  "scale-info",

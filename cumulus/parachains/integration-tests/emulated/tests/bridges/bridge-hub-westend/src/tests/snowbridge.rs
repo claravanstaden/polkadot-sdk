@@ -253,7 +253,6 @@ fn send_weth_asset_from_asset_hub_to_ethereum() {
 	});
 
 	BridgeHubWestend::execute_with(|| {
-		use bridge_hub_westend_runtime::xcm_config::TreasuryAccount;
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		// Check that the transfer token back to Ethereum message was queue in the Ethereum
 		// Outbound Queue

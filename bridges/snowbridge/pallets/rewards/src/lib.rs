@@ -13,15 +13,14 @@ mod tests;
 extern crate alloc;
 
 use frame_support::{
-	sp_runtime::{SaturatedConversion, Saturating},
+	sp_runtime::Saturating,
 	traits::fungible::{Inspect, Mutate},
 	PalletError,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use snowbridge_core::{rewards::RewardLedger, ParaId};
+use snowbridge_core::{fees::burn_fees, rewards::RewardLedger};
 use sp_core::H160;
-use sp_runtime::TokenError;
 pub use weights::WeightInfo;
 use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
 use xcm_executor::traits::TransactAsset;
@@ -161,7 +160,7 @@ pub mod pallet {
 			let asset_hub_fee_asset: Asset = (Location::parent(), xcm_fee).into();
 
 			let fee: BalanceOf<T> = xcm_fee.try_into().map_err(|_| Error::<T>::InvalidFee)?;
-			Self::burn_fees(T::AssetHubParaId::get().into(), fee)?;
+			burn_fees::<T::AssetTransactor, BalanceOf<T>>(T::AssetHubParaId::get().into(), fee)?;
 
 			let xcm: Xcm<()> = alloc::vec![
 				// Teleport required fees.
@@ -194,31 +193,6 @@ pub mod pallet {
 				value,
 				message_id,
 			});
-			Ok(())
-		}
-
-		/// Burn the amount of the fee embedded into the XCM for teleports
-		/// Todo refactor out
-		pub fn burn_fees(para_id: ParaId, fee: BalanceOf<T>) -> DispatchResult {
-			let dummy_context =
-				XcmContext { origin: None, message_id: Default::default(), topic: None };
-			let dest = Location::new(1, [Parachain(para_id.into())]);
-			let fees = (Location::parent(), fee.saturated_into::<u128>()).into();
-			T::AssetTransactor::can_check_out(&dest, &fees, &dummy_context).map_err(|error| {
-				log::error!(
-					target: LOG_TARGET,
-					"XCM asset check out failed with error {:?}", error
-				);
-				TokenError::FundsUnavailable
-			})?;
-			T::AssetTransactor::check_out(&dest, &fees, &dummy_context);
-			T::AssetTransactor::withdraw_asset(&fees, &dest, None).map_err(|error| {
-				log::error!(
-					target: LOG_TARGET,
-					"XCM asset withdraw failed with error {:?}", error
-				);
-				TokenError::FundsUnavailable
-			})?;
 			Ok(())
 		}
 	}

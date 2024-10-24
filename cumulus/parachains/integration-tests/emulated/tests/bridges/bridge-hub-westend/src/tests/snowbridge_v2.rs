@@ -13,21 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate::imports::*;
-use asset_hub_westend_runtime::xcm_config::bridging::to_ethereum::DefaultBridgeHubEthereumBaseFee;
 use bridge_hub_westend_runtime::EthereumInboundQueue;
-use codec::{Decode, Encode};
-use emulated_integration_tests_common::RESERVABLE_ASSET_ID;
-use frame_support::pallet_prelude::TypeInfo;
 use hex_literal::hex;
-use rococo_westend_system_emulated_network::asset_hub_westend_emulated_chain::genesis::AssetHubWestendAssetOwner;
-use snowbridge_core::{outbound::OperatingMode, AssetMetadata, TokenIdOf};
 use snowbridge_router_primitives::inbound::{
-	Command, Destination, GlobalConsensusEthereumConvertsFor, MessageV1, VersionedMessage,
+	Command, Destination, MessageV1, VersionedMessage,
 };
-use snowbridge_pallet_rewards::Error::InsufficientFunds;
 use sp_core::H256;
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
-use xcm_executor::traits::ConvertLocation;
 use snowbridge_core::rewards::RewardLedger;
 
 const INITIAL_FUND: u128 = 5_000_000_000_000;
@@ -148,7 +140,6 @@ fn send_weth_from_asset_hub_to_ethereum_by_executing_raw_xcm() {
 	});
 
 	BridgeHubWestend::execute_with(|| {
-		use bridge_hub_westend_runtime::xcm_config::TreasuryAccount;
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		// Check that the transfer token back to Ethereum message was queue in the Ethereum
 		// Outbound Queue
@@ -226,80 +217,15 @@ fn claim_rewards_works() {
 			)),
 			"RewardClaimed event with correct fields."
 		);
-
-		/*
-		RuntimeEvent::EthereumRewards(
-        Event::RewardDeposited {
-            account_id: d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...),
-            value: 2000000000000000000,
-        },
-			),
-			RuntimeEvent::XcmpQueue(
-				Event::XcmpMessageSent {
-					message_hash: [
-						67,
-						163,
-						22,
-						82,
-						218,
-						183,
-						34,
-						222,
-						244,
-						233,
-						106,
-						252,
-						199,
-						81,
-						2,
-						159,
-						116,
-						19,
-						241,
-						135,
-						208,
-						19,
-						23,
-						71,
-						203,
-						196,
-						169,
-						208,
-						235,
-						101,
-						32,
-						59,
-					],
-				},
-			),
-			RuntimeEvent::EthereumRewards(
-				Event::RewardClaimed {
-					account_id: d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d (5GrwvaEF...),
-					deposit_address: 8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48 (5FHneW46...),
-					value: 1000000000000000000,
-					message_id: 0xd053923c8090a1c15ec02ff65beabcb11b1537b5bda1803704776d71f2bfde7d,
-				},
-			),
-
-		 */
 	});
 
 	AssetHubWestend::execute_with(|| {
 		type RuntimeEvent = <AssetHubWestend as Chain>::RuntimeEvent;
-		type RuntimeOrigin = <AssetHubWestend as Chain>::RuntimeOrigin;
 		assert_expected_events!(
 			AssetHubWestend,
 			vec![RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { .. }) => {},]
 		);
 	})
-	/*
-	RuntimeEvent::Balances(
-        Event::Minted {
-            who: ce796ae65569a670d0c1cc1ac12515a3ce21b5fbf729d63d7b289baad070139d (5GjRnmh5...),
-            amount: 2814000000,
-        },
-    ),
-	 */
 }
 
 #[test]
