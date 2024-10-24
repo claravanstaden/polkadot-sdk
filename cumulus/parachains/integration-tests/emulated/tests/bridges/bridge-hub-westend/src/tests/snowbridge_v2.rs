@@ -170,8 +170,31 @@ fn send_weth_from_asset_hub_to_ethereum_by_executing_raw_xcm() {
 }
 
 #[test]
-fn claim_rewards_works(
-) {
+fn claim_rewards_works() {
+	let weth: [u8; 20] = hex!("fff9976782d46cc05630d1f6ebab18b2324d6b14");
+	let assethub_location = BridgeHubWestend::sibling_location_of(AssetHubWestend::para_id());
+	let assethub_sovereign = BridgeHubWestend::sovereign_account_id_of(assethub_location);
+	let weth_asset_location: Location =
+		(Parent, Parent, EthereumNetwork::get(), AccountKey20 { network: None, key: weth }).into();
+
+	BridgeHubWestend::fund_accounts(vec![(assethub_sovereign.clone(), INITIAL_FUND)]);
+
+	AssetHubWestend::execute_with(|| {
+		type RuntimeOrigin = <AssetHubWestend as Chain>::RuntimeOrigin;
+
+		assert_ok!(<AssetHubWestend as AssetHubWestendPallet>::ForeignAssets::force_create(
+			RuntimeOrigin::root(),
+			weth_asset_location.clone().try_into().unwrap(),
+			assethub_sovereign.clone().into(),
+			true,
+			1,
+		));
+
+		assert!(<AssetHubWestend as AssetHubWestendPallet>::ForeignAssets::asset_exists(
+			weth_asset_location.clone().try_into().unwrap(),
+		));
+	});
+
 	BridgeHubWestend::execute_with(|| {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		type RuntimeOrigin = <BridgeHubWestend as Chain>::RuntimeOrigin;
