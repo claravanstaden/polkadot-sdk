@@ -198,6 +198,7 @@ pub mod pallet {
 		}
 
 		/// Burn the amount of the fee embedded into the XCM for teleports
+		/// Todo refactor out
 		pub fn burn_fees(para_id: ParaId, fee: BalanceOf<T>) -> DispatchResult {
 			let dummy_context =
 				XcmContext { origin: None, message_id: Default::default(), topic: None };
