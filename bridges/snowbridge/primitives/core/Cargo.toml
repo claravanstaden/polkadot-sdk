@@ -33,6 +33,8 @@ sp-arithmetic = { workspace = true }
 snowbridge-beacon-primitives = { workspace = true }
 
 ethabi = { workspace = true }
+alloy-primitives = { features = ["rlp"], workspace = true }
+alloy-sol-types = { workspace = true }
 xcm-executor = { workspace = true, default-features = false }
 
 [dev-dependencies]
@@ -41,6 +43,8 @@ hex = { workspace = true, default-features = true }
 [features]
 default = ["std"]
 std = [
+	"alloy-primitives/std",
+	"alloy-sol-types/std",
 	"codec/std",
 	"ethabi/std",
 	"frame-support/std",

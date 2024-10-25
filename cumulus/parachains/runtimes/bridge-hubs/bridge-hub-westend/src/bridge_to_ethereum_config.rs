@@ -25,8 +25,10 @@ use crate::{
 use parachains_common::{AccountId, Balance};
 use snowbridge_beacon_primitives::{Fork, ForkVersions};
 use snowbridge_core::{gwei, meth, AllowSiblingsOnly, PricingParameters, Rewards};
-use snowbridge_router_primitives::{inbound::MessageToXcm, outbound::EthereumBlobExporter};
-use snowbridge_router_primitives_v2::outbound::EthereumBlobExporter as EthereumBlobExporterV2;
+use snowbridge_router_primitives::{
+	inbound::{v1::MessageToXcm, v2::MessageToXcm as MessageToXcmV2},
+	outbound::{v1::EthereumBlobExporter, v2::EthereumBlobExporter as EthereumBlobExporterV2},
+};
 use sp_core::H160;
 use testnet_parachains_constants::westend::{
 	currency::*,
@@ -155,6 +157,7 @@ impl snowbridge_pallet_outbound_queue_v2::Config for Runtime {
 	type RewardLedger = EthereumRewards;
 	type Token = Balances;
 	type WeightInfo = crate::weights::snowbridge_pallet_outbound_queue_v2::WeightInfo<Runtime>;
+	type RewardLedger = ();
 }
 
 #[cfg(any(feature = "std", feature = "fast-runtime", feature = "runtime-benchmarks", test))]

@@ -114,9 +114,8 @@ use frame_support::{
 };
 use snowbridge_core::{
 	inbound::Message as DeliveryMessage,
-	outbound::v2::{CommandWrapper, Fee, GasMeter, Message},
-	rewards::RewardLedger,
-	BasicOperatingMode,
+	outbound::v2::{CommandWrapper, Fee, GasMeter, InboundMessage, Message},
+	BasicOperatingMode, rewards::RewardLedger,
 };
 use snowbridge_merkle_tree::merkle_root;
 use sp_core::H256;
@@ -125,11 +124,15 @@ use sp_runtime::{
 	ArithmeticError, DigestItem,
 };
 use sp_std::prelude::*;
-pub use types::{CommittedMessage, FeeWithBlockNumber, ProcessMessageOriginOf};
+pub use types::{PendingOrder, ProcessMessageOriginOf};
 pub use weights::WeightInfo;
 use frame_support::traits::fungible::{Inspect, Mutate};
 
 pub use pallet::*;
+
+use alloy_sol_types::SolValue;
+
+use sp_runtime::traits::TrailingZeroInput;
 
 type BalanceOf<T> =
 	<<T as pallet::Config>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
@@ -241,7 +244,7 @@ pub mod pallet {
 	/// Inspired by the `frame_system::Pallet::Events` storage value
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub(super) type Messages<T: Config> = StorageValue<_, Vec<CommittedMessage>, ValueQuery>;
+	pub(super) type Messages<T: Config> = StorageValue<_, Vec<InboundMessage>, ValueQuery>;
 
 	/// Hashes of the ABI-encoded messages in the [`Messages`] storage value. Used to generate a
 	/// merkle root during `on_finalize`. This storage value is killed in
@@ -260,10 +263,10 @@ pub mod pallet {
 	#[pallet::getter(fn operating_mode)]
 	pub type OperatingMode<T: Config> = StorageValue<_, BasicOperatingMode, ValueQuery>;
 
-	/// Fee locked by nonce
+	/// Pending orders to relay
 	#[pallet::storage]
-	pub type LockedFee<T: Config> =
-		StorageMap<_, Identity, u64, FeeWithBlockNumber<BlockNumberFor<T>>, OptionQuery>;
+	pub type PendingOrders<T: Config> =
+		StorageMap<_, Identity, u64, PendingOrder<BlockNumberFor<T>>, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -319,14 +322,15 @@ pub mod pallet {
 			ensure!(T::GatewayAddress::get() == envelope.gateway, Error::<T>::InvalidGateway);
 
 			let nonce = envelope.nonce;
+			ensure!(<PendingOrders<T>>::contains_key(nonce), Error::<T>::PendingNonceNotExist);
 
-			let locked = <LockedFee<T>>::get(nonce).ok_or(Error::<T>::PendingNonceNotExist)?;
-			let reward_account = T::AccountId::decode(&mut &envelope.reward_address[..])
-				.map_err(|_| Error::<T>::InvalidRewardAccount)?;
+			let order = <PendingOrders<T>>::get(nonce).ok_or(Error::<T>::PendingNonceNotExist)?;
+			let account = T::AccountId::decode(&mut &envelope.reward_address[..]).unwrap_or(
+				T::AccountId::decode(&mut TrailingZeroInput::zeroes()).expect("zero address"),
+			);
+			T::RewardLedger::deposit(account, order.fee.into())?;
 
-			let amount: BalanceOf<T> = locked.fee.try_into().map_err(|_| Error::<T>::InvalidFee)?;
-			T::RewardLedger::deposit(reward_account, amount)?;
-			<LockedFee<T>>::remove(nonce);
+			<PendingOrders<T>>::remove(nonce);
 
 			Self::deposit_event(Event::MessageDeliveryProofReceived { nonce });
 
@@ -378,28 +382,24 @@ pub mod pallet {
 				.into_iter()
 				.map(|command| CommandWrapper {
 					kind: command.index(),
-					max_dispatch_gas: T::GasMeter::maximum_dispatch_gas_used_at_most(&command),
-					command: command.abi_encode(),
+					gas: T::GasMeter::maximum_dispatch_gas_used_at_most(&command),
+					payload: command.abi_encode(),
 				})
 				.collect();
 
 			// Construct the final committed message
-			let committed_message = CommittedMessage {
-				origin: message.origin,
-				nonce,
-				id: message.id,
-				commands: commands.try_into().map_err(|_| Unsupported)?,
-			};
+			let committed_message =
+				InboundMessage { origin: message.origin.0.to_vec(), nonce, commands };
 
 			// ABI-encode and hash the prepared message
-			let message_abi_encoded = ethabi::encode(&[committed_message.clone().into()]);
+			let message_abi_encoded = committed_message.abi_encode();
 			let message_abi_encoded_hash = <T as Config>::Hashing::hash(&message_abi_encoded);
 
 			Messages::<T>::append(Box::new(committed_message.clone()));
 			MessageLeaves::<T>::append(message_abi_encoded_hash);
 
-			<LockedFee<T>>::try_mutate(nonce, |maybe_locked| -> DispatchResult {
-				let mut locked = maybe_locked.clone().unwrap_or_else(|| FeeWithBlockNumber {
+			<PendingOrders<T>>::try_mutate(nonce, |maybe_locked| -> DispatchResult {
+				let mut locked = maybe_locked.clone().unwrap_or_else(|| PendingOrder {
 					nonce,
 					fee: 0,
 					block_number: frame_system::Pallet::<T>::current_block_number(),
@@ -411,9 +411,7 @@ pub mod pallet {
 			})
 			.map_err(|_| Unsupported)?;
 
-			let new_nonce = nonce.checked_add(1).ok_or(Unsupported)?;
-
-			Nonce::<T>::set(new_nonce);
+			Nonce::<T>::set(nonce.checked_add(1).ok_or(Unsupported)?);
 
 			Self::deposit_event(Event::MessageAccepted { id: message.id, nonce });
 

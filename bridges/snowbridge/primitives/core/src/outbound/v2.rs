@@ -3,14 +3,94 @@
 //! # Outbound V2 primitives
 
 use crate::outbound::OperatingMode;
+use alloy_sol_types::sol;
 use codec::{Decode, Encode};
-use ethabi::Token;
 use frame_support::{pallet_prelude::ConstU32, BoundedVec, PalletError};
 use hex_literal::hex;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
-use sp_core::{RuntimeDebug, H160, H256, U256};
-use sp_std::{borrow::ToOwned, vec, vec::Vec};
+use sp_core::{RuntimeDebug, H160, H256};
+use sp_std::{vec, vec::Vec};
+
+use alloy_primitives::{Address, FixedBytes};
+use alloy_sol_types::SolValue;
+
+sol! {
+	#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+	#[cfg_attr(feature = "std", derive(PartialEq))]
+	struct InboundMessage {
+		// origin
+		bytes origin;
+		// Message nonce
+		uint64 nonce;
+		// Commands
+		CommandWrapper[] commands;
+	}
+
+	#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+	#[cfg_attr(feature = "std", derive(PartialEq))]
+	struct CommandWrapper {
+		uint8 kind;
+		uint64 gas;
+		bytes payload;
+	}
+
+	// Payload for Upgrade
+	struct UpgradeParams {
+		// The address of the implementation contract
+		address implAddress;
+		// Codehash of the new implementation contract.
+		bytes32 implCodeHash;
+		// Parameters used to upgrade storage of the gateway
+		bytes initParams;
+	}
+
+	// Payload for CreateAgent
+	struct CreateAgentParams {
+		/// @dev The agent ID of the consensus system
+		bytes32 agentID;
+	}
+
+	// Payload for SetOperatingMode instruction
+	struct SetOperatingModeParams {
+		/// The new operating mode
+		uint8 mode;
+	}
+
+	// Payload for NativeTokenUnlock instruction
+	struct UnlockNativeTokenParams {
+		// Token address
+		address token;
+		// Recipient address
+		address recipient;
+		// Amount to unlock
+		uint128 amount;
+	}
+
+	// Payload for RegisterForeignToken
+	struct RegisterForeignTokenParams {
+		/// @dev The token ID (hash of stable location id of token)
+		bytes32 foreignTokenID;
+		/// @dev The name of the token
+		bytes name;
+		/// @dev The symbol of the token
+		bytes symbol;
+		/// @dev The decimal of the token
+		uint8 decimals;
+	}
+
+	// Payload for MintForeignTokenParams instruction
+	struct MintForeignTokenParams {
+		// Foreign token ID
+		bytes32 foreignTokenID;
+		// Recipient address
+		address recipient;
+		// Amount to mint
+		uint128 amount;
+	}
+}
+
+pub const MAX_COMMANDS: u32 = 8;
 
 /// A message which can be accepted by implementations of `/[`SendMessage`\]`
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug)]
@@ -23,7 +103,7 @@ pub struct Message {
 	/// Fee
 	pub fee: u128,
 	/// Commands
-	pub commands: BoundedVec<Command, ConstU32<5>>,
+	pub commands: BoundedVec<Command, ConstU32<MAX_COMMANDS>>,
 }
 
 /// A command which is executable by the Gateway contract on Ethereum
@@ -49,15 +129,6 @@ pub enum Command {
 	SetOperatingMode {
 		/// The new operating mode
 		mode: OperatingMode,
-	},
-	/// Transfer ether from an agent contract to a recipient account
-	TransferNativeFromAgent {
-		/// The agent ID
-		agent_id: H256,
-		/// The recipient of the ether
-		recipient: H160,
-		/// The amount to transfer
-		amount: u128,
 	},
 	/// Unlock ERC20 tokens
 	UnlockNativeToken {
@@ -96,57 +167,50 @@ impl Command {
 	/// Compute the enum variant index
 	pub fn index(&self) -> u8 {
 		match self {
-			Command::Upgrade { .. } => 1,
-			Command::CreateAgent { .. } => 2,
-			Command::SetOperatingMode { .. } => 5,
-			Command::TransferNativeFromAgent { .. } => 6,
-			Command::UnlockNativeToken { .. } => 9,
-			Command::RegisterForeignToken { .. } => 10,
-			Command::MintForeignToken { .. } => 11,
+			Command::Upgrade { .. } => 0,
+			Command::SetOperatingMode { .. } => 1,
+			Command::UnlockNativeToken { .. } => 2,
+			Command::RegisterForeignToken { .. } => 3,
+			Command::MintForeignToken { .. } => 4,
+			Command::CreateAgent { .. } => 5,
 		}
 	}
 
 	/// ABI-encode the Command.
 	pub fn abi_encode(&self) -> Vec<u8> {
 		match self {
-			Command::Upgrade { impl_address, impl_code_hash, initializer, .. } =>
-				ethabi::encode(&[Token::Tuple(vec![
-					Token::Address(*impl_address),
-					Token::FixedBytes(impl_code_hash.as_bytes().to_owned()),
-					initializer.clone().map_or(Token::Bytes(vec![]), |i| Token::Bytes(i.params)),
-				])]),
+			Command::Upgrade { impl_address, impl_code_hash, initializer, .. } => UpgradeParams {
+				implAddress: Address::from(impl_address.as_fixed_bytes()),
+				implCodeHash: FixedBytes::from(impl_code_hash.as_fixed_bytes()),
+				initParams: initializer.clone().map_or(vec![], |i| i.params),
+			}
+			.abi_encode(),
 			Command::CreateAgent { agent_id } =>
-				ethabi::encode(&[Token::Tuple(vec![Token::FixedBytes(
-					agent_id.as_bytes().to_owned(),
-				)])]),
+				CreateAgentParams { agentID: FixedBytes::from(agent_id.as_fixed_bytes()) }
+					.abi_encode(),
 			Command::SetOperatingMode { mode } =>
-				ethabi::encode(&[Token::Tuple(vec![Token::Uint(U256::from((*mode) as u64))])]),
-			Command::TransferNativeFromAgent { agent_id, recipient, amount } =>
-				ethabi::encode(&[Token::Tuple(vec![
-					Token::FixedBytes(agent_id.as_bytes().to_owned()),
-					Token::Address(*recipient),
-					Token::Uint(U256::from(*amount)),
-				])]),
-			Command::UnlockNativeToken { agent_id, token, recipient, amount } =>
-				ethabi::encode(&[Token::Tuple(vec![
-					Token::FixedBytes(agent_id.as_bytes().to_owned()),
-					Token::Address(*token),
-					Token::Address(*recipient),
-					Token::Uint(U256::from(*amount)),
-				])]),
+				SetOperatingModeParams { mode: (*mode) as u8 }.abi_encode(),
+			Command::UnlockNativeToken { token, recipient, amount, .. } =>
+				UnlockNativeTokenParams {
+					token: Address::from(token.as_fixed_bytes()),
+					recipient: Address::from(recipient.as_fixed_bytes()),
+					amount: *amount,
+				}
+				.abi_encode(),
 			Command::RegisterForeignToken { token_id, name, symbol, decimals } =>
-				ethabi::encode(&[Token::Tuple(vec![
-					Token::FixedBytes(token_id.as_bytes().to_owned()),
-					Token::String(name.to_owned()),
-					Token::String(symbol.to_owned()),
-					Token::Uint(U256::from(*decimals)),
-				])]),
-			Command::MintForeignToken { token_id, recipient, amount } =>
-				ethabi::encode(&[Token::Tuple(vec![
-					Token::FixedBytes(token_id.as_bytes().to_owned()),
-					Token::Address(*recipient),
-					Token::Uint(U256::from(*amount)),
-				])]),
+				RegisterForeignTokenParams {
+					foreignTokenID: FixedBytes::from(token_id.as_fixed_bytes()),
+					name: name.to_vec(),
+					symbol: symbol.to_vec(),
+					decimals: *decimals,
+				}
+				.abi_encode(),
+			Command::MintForeignToken { token_id, recipient, amount } => MintForeignTokenParams {
+				foreignTokenID: FixedBytes::from(token_id.as_fixed_bytes()),
+				recipient: Address::from(recipient.as_fixed_bytes()),
+				amount: *amount,
+			}
+			.abi_encode(),
 		}
 	}
 }
@@ -159,25 +223,6 @@ pub struct Initializer {
 	pub params: Vec<u8>,
 	/// The initializer is allowed to consume this much gas at most.
 	pub maximum_required_gas: u64,
-}
-
-#[derive(Encode, Decode, Clone, RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(PartialEq))]
-pub struct CommandWrapper {
-	pub kind: u8,
-	pub max_dispatch_gas: u64,
-	pub command: Vec<u8>,
-}
-
-/// ABI-encoded form for delivery to the Gateway contract on Ethereum
-impl From<CommandWrapper> for Token {
-	fn from(x: CommandWrapper) -> Token {
-		Token::Tuple(vec![
-			Token::Uint(x.kind.into()),
-			Token::Uint(x.max_dispatch_gas.into()),
-			Token::Bytes(x.command),
-		])
-	}
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -243,15 +288,6 @@ pub enum SendError {
 }
 
 pub trait GasMeter {
-	/// All the gas used for submitting a message to Ethereum, minus the cost of dispatching
-	/// the command within the message
-	const MAXIMUM_BASE_GAS: u64;
-
-	/// Total gas consumed at most, including verification & dispatch
-	fn maximum_gas_used_at_most(command: &Command) -> u64 {
-		Self::MAXIMUM_BASE_GAS + Self::maximum_dispatch_gas_used_at_most(command)
-	}
-
 	/// Measures the maximum amount of gas a command payload will require to *dispatch*, NOT
 	/// including validation & verification.
 	fn maximum_dispatch_gas_used_at_most(command: &Command) -> u64;
@@ -268,15 +304,9 @@ pub trait GasMeter {
 pub struct ConstantGasMeter;
 
 impl GasMeter for ConstantGasMeter {
-	// The base transaction cost, which includes:
-	// 21_000 transaction cost, roughly worst case 64_000 for calldata, and 100_000
-	// for message verification
-	const MAXIMUM_BASE_GAS: u64 = 185_000;
-
 	fn maximum_dispatch_gas_used_at_most(command: &Command) -> u64 {
 		match command {
 			Command::CreateAgent { .. } => 275_000,
-			Command::TransferNativeFromAgent { .. } => 60_000,
 			Command::SetOperatingMode { .. } => 40_000,
 			Command::Upgrade { initializer, .. } => {
 				let initializer_max_gas = match *initializer {
@@ -295,8 +325,6 @@ impl GasMeter for ConstantGasMeter {
 }
 
 impl GasMeter for () {
-	const MAXIMUM_BASE_GAS: u64 = 1;
-
 	fn maximum_dispatch_gas_used_at_most(_: &Command) -> u64 {
 		1
 	}

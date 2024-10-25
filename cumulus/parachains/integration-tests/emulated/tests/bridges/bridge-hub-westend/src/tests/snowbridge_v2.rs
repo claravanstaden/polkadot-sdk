@@ -16,7 +16,8 @@ use crate::imports::*;
 use bridge_hub_westend_runtime::EthereumInboundQueue;
 use hex_literal::hex;
 use snowbridge_router_primitives::inbound::{
-	Command, Destination, MessageV1, VersionedMessage,
+	v1::{Command, Destination, MessageV1, VersionedMessage},
+	GlobalConsensusEthereumConvertsFor,
 };
 use sp_core::H256;
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;

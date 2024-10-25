@@ -54,7 +54,10 @@ use snowbridge_core::{
 	rewards::RewardLedger,
 	BasicOperatingMode,
 };
-use snowbridge_router_primitives_v2::inbound::Message as MessageV2;
+use snowbridge_router_primitives::inbound::v2::{
+	ConvertMessage, ConvertMessageError, VersionedMessage,
+};
+use sp_runtime::{traits::Saturating, SaturatedConversion, TokenError};
 
 pub use weights::WeightInfo;
 

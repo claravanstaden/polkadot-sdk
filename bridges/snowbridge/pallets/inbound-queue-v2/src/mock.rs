@@ -11,7 +11,7 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use snowbridge_router_primitives_v2::inbound::MessageToXcm;
+use snowbridge_router_primitives::inbound::v2::MessageToXcm;
 use sp_core::{H160, H256};
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
