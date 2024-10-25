@@ -54,10 +54,7 @@ use snowbridge_core::{
 	rewards::RewardLedger,
 	BasicOperatingMode,
 };
-use snowbridge_router_primitives::inbound::v2::{
-	ConvertMessage, ConvertMessageError, VersionedMessage,
-};
-use sp_runtime::{traits::Saturating, SaturatedConversion, TokenError};
+use snowbridge_router_primitives::inbound::v2::Message as MessageV2;
 
 pub use weights::WeightInfo;
 
@@ -196,7 +193,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::submit())]
 		pub fn submit(origin: OriginFor<T>, message: Message) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let _who = ensure_signed(origin)?;
 			ensure!(!Self::operating_mode().is_halted(), Error::<T>::Halted);
 
 			// submit message to verifier for verification
