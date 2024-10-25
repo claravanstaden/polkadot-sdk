@@ -30,6 +30,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		EthereumBeaconClient: snowbridge_pallet_ethereum_client::{Pallet, Call, Storage, Event<T>},
+		EthereumRewards: snowbridge_pallet_rewards::{Pallet, Call, Storage, Event<T>},
 		InboundQueue: inbound_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -167,6 +168,23 @@ impl inbound_queue::Config for Test {
 	type GatewayAddress = GatewayAddress;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Test;
+	type Token = Balances;
+	type RewardLedger = EthereumRewards;
+}
+
+parameter_types! {
+	pub WethAddress: H160 = hex!("774667629726ec1FaBEbCEc0D9139bD1C8f72a23").into();
+}
+
+impl snowbridge_pallet_rewards::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type AssetHubParaId = ConstU32<1000>;
+	type EthereumNetwork = EthereumNetwork;
+	type WethAddress = WethAddress;
+	type XcmSender = MockXcmSender;
+	type AssetTransactor = SuccessfulTransactor;
+	type Token = Balance;
+	type WeightInfo = ();
 }
 
 pub fn last_events(n: usize) -> Vec<RuntimeEvent> {
@@ -267,6 +285,38 @@ pub fn mock_execution_proof() -> ExecutionProof {
 			excess_blob_gas: 0,
 		}),
 		execution_branch: vec![],
+	}
+}
+
+pub struct SuccessfulTransactor;
+impl TransactAsset for SuccessfulTransactor {
+	fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn can_check_out(_dest: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn deposit_asset(_what: &Asset, _who: &Location, _context: Option<&XcmContext>) -> XcmResult {
+		Ok(())
+	}
+
+	fn withdraw_asset(
+		_what: &Asset,
+		_who: &Location,
+		_context: Option<&XcmContext>,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
+	}
+
+	fn internal_transfer_asset(
+		_what: &Asset,
+		_from: &Location,
+		_to: &Location,
+		_context: &XcmContext,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
 	}
 }
 

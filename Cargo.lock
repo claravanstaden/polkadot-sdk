@@ -21106,6 +21106,7 @@ dependencies = [
  "snowbridge-core",
  "snowbridge-pallet-ethereum-client",
  "snowbridge-pallet-inbound-queue-fixtures-v2",
+ "snowbridge-pallet-rewards",
  "snowbridge-router-primitives-v2",
  "sp-core 28.0.0",
  "sp-io 30.0.0",
