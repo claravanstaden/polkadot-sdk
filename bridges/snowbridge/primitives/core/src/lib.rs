@@ -39,7 +39,7 @@ pub use operating_mode::BasicOperatingMode;
 
 pub use pricing::{PricingParameters, Rewards};
 
-pub use reward::RewardLedger;
+pub use rewards::RewardLedger;
 
 pub fn sibling_sovereign_account<T>(para_id: ParaId) -> T::AccountId
 where
