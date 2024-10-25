@@ -21165,6 +21165,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "pallet-balances",
  "parity-scale-codec",
  "scale-info",
  "snowbridge-core",

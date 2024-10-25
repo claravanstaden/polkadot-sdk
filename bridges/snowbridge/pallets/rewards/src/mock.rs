@@ -12,15 +12,17 @@ use sp_runtime::{
 };
 use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
+use xcm_executor::AssetsInHolding;
 
 use crate::{self as snowbridge_pallet_rewards};
 
-type Block = frame_system::mocking::MockBlock<Test>;
+pub type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		EthereumRewards: snowbridge_pallet_rewards::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -28,12 +30,27 @@ frame_support::construct_runtime!(
 pub type Signature = MultiSignature;
 pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::AccountId;
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 1;
+}
+
+type Balance = u128;
+
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
+impl pallet_balances::Config for Test {
+	type Balance = Balance;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+}
+
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
+	type AccountData = pallet_balances::AccountData<u128>;
 	type Block = Block;
 }
+
 
 parameter_types! {
 	pub EthereumNetwork: NetworkId = NetworkId::Ethereum { chain_id: 11155111 };
@@ -46,6 +63,8 @@ impl snowbridge_pallet_rewards::Config for Test {
 	type EthereumNetwork = EthereumNetwork;
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
+	type Token = Balances;
+	type AssetTransactor = SuccessfulTransactor;
 	type WeightInfo = ();
 }
 
@@ -77,22 +96,40 @@ impl SendXcm for MockXcmSender {
 
 pub const WETH: u128 = 1_000_000_000_000_000_000;
 
-pub fn last_events(n: usize) -> Vec<RuntimeEvent> {
-	frame_system::Pallet::<Test>::events()
-		.into_iter()
-		.rev()
-		.take(n)
-		.rev()
-		.map(|e| e.event)
-		.collect()
-}
-
-pub fn expect_events(e: Vec<RuntimeEvent>) {
-	assert_eq!(last_events(e.len()), e);
-}
-
 pub fn new_tester() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let ext = sp_io::TestExternalities::new(t);
 	ext
+}
+
+pub struct SuccessfulTransactor;
+impl TransactAsset for SuccessfulTransactor {
+	fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn can_check_out(_dest: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn deposit_asset(_what: &Asset, _who: &Location, _context: Option<&XcmContext>) -> XcmResult {
+		Ok(())
+	}
+
+	fn withdraw_asset(
+		_what: &Asset,
+		_who: &Location,
+		_context: Option<&XcmContext>,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
+	}
+
+	fn internal_transfer_asset(
+		_what: &Asset,
+		_from: &Location,
+		_to: &Location,
+		_context: &XcmContext,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
+	}
 }

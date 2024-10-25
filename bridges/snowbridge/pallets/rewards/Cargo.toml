@@ -39,6 +39,7 @@ snowbridge-router-primitives = { workspace = true }
 hex = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
+pallet-balances = { workspace = true, default-features = true }
 
 [features]
 default = ["std"]

@@ -3,8 +3,7 @@
 
 use super::*;
 use crate::{
-	mock::{expect_events, new_tester, AccountId, EthereumRewards, RuntimeOrigin, Test, WETH},
-	Event as RewardEvent,
+	mock::{new_tester, AccountId, EthereumRewards, RuntimeOrigin, Test, WETH},
 };
 use frame_support::{assert_err, assert_ok};
 use sp_core::H256;
@@ -17,9 +16,6 @@ fn test_deposit() {
 		let result = EthereumRewards::deposit(relayer.clone().into(), 2 * WETH);
 		assert_ok!(result);
 		assert_eq!(<RewardsMapping<Test>>::get(relayer.clone()), 2 * WETH);
-		//expect_events(vec![RewardEvent::RewardDeposited {
-		//   account_id: relayer.clone(), value: 2 * WETH
-		//}]);
 
 		// Check accumulation works
 		let result2 = EthereumRewards::deposit(relayer.clone().into(), 3 * WETH);
