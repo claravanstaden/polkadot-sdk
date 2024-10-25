@@ -3,11 +3,9 @@
 use super::*;
 
 use frame_support::{assert_noop, assert_ok};
-use hex_literal::hex;
-use snowbridge_core::{inbound::Proof, ChannelId};
+use snowbridge_core::inbound::Proof;
 use sp_keyring::AccountKeyring as Keyring;
 use sp_runtime::DispatchError;
-use sp_std::convert::From;
 
 use crate::{Error, Event as InboundQueueEvent};
 

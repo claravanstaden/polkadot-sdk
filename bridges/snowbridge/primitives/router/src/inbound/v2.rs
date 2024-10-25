@@ -4,17 +4,12 @@
 
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
-use frame_support::{traits::tokens::Balance as BalanceT, weights::Weight, PalletError};
-use scale_info::TypeInfo;
-use snowbridge_core::TokenId;
-use sp_core::{Get, RuntimeDebug, H160, H256};
+use sp_core::{RuntimeDebug, H160};
 use sp_io::hashing::blake2_256;
-use sp_runtime::{traits::MaybeEquivalence, MultiAddress};
 use sp_std::prelude::*;
-use xcm::prelude::{Junction::AccountKey20, *};
+use xcm::prelude::*;
 use xcm_executor::traits::ConvertLocation;
 
-const MINIMUM_DEPOSIT: u128 = 1;
 
 /// Messages from Ethereum are versioned. This is because in future,
 /// we may want to evolve the protocol so that the ethereum side sends XCM messages directly.

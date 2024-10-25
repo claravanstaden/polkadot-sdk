@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
 use super::*;
 
-use frame_support::{derive_impl, parameter_types, traits::ConstU32, weights::IdentityFee};
+use frame_support::{derive_impl, parameter_types, traits::ConstU32};
 use hex_literal::hex;
 use snowbridge_beacon_primitives::{
 	types::deneb, BeaconHeader, ExecutionProof, Fork, ForkVersions, VersionedExecutionPayloadHeader,
@@ -11,17 +11,20 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use sp_core::{H160, H256};
+use sp_core::H160;
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
-	BuildStorage, FixedU128, MultiSignature,
+	BuildStorage, MultiSignature,
 };
 use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
+use xcm_executor::traits::TransactAsset;
+use xcm_executor::AssetsInHolding;
 
 use crate::{self as inbound_queue};
 
-type Block = frame_system::mocking::MockBlock<Test>;
+pub type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+pub type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test
@@ -168,7 +171,7 @@ impl inbound_queue::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Test;
 	type Token = Balances;
-	type RewardLedger = EthereumRewards;
+	type RewardLedger = ();
 }
 
 parameter_types! {
@@ -182,7 +185,7 @@ impl snowbridge_pallet_rewards::Config for Test {
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
 	type AssetTransactor = SuccessfulTransactor;
-	type Token = Balance;
+	type Token = Balances;
 	type WeightInfo = ();
 }
 
