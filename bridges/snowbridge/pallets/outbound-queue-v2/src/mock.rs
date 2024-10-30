@@ -21,7 +21,7 @@ use snowbridge_core::{
 	pricing::{PricingParameters, Rewards},
 	ParaId,
 };
-use sp_core::{ConstU128, ConstU32, H160, H256};
+use sp_core::{ConstU128, ConstU8, ConstU32, H160, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 	AccountId32, BuildStorage, FixedU128,
@@ -176,6 +176,7 @@ impl pallet_bridge_relayers::Config for Test {
 	type Token = Balances;
 	type AssetHubParaId = ConstU32<1000>;
 	type EthereumNetwork = EthereumNetwork;
+	type InboundQueuePalletInstance = ConstU8<80>;
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
 

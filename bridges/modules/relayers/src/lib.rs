@@ -98,6 +98,7 @@ pub mod pallet {
 		type LaneId: LaneIdType + Send + Sync;
 		/// AssetHub parachain ID
 		type AssetHubParaId: Get<u32>;
+		type InboundQueuePalletInstance: Get<u8>;
 		/// Ethereum network ID including the chain ID
 		type EthereumNetwork: Get<NetworkId>;
 		/// Message relayers are rewarded with this asset
@@ -449,7 +450,7 @@ pub mod pallet {
 			let asset_hub_fee_asset: Asset = (Location::parent(), T::AssetHubXCMFee::get()).into();
 
 			let xcm: Xcm<()> = alloc::vec![
-				DescendOrigin(PalletInstance(80).into()),
+				DescendOrigin(PalletInstance(T::InboundQueuePalletInstance::get()).into()),
 				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
 				ReserveAssetDeposited(deposit.clone().into()),
 				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },

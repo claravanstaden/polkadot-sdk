@@ -13,7 +13,7 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use sp_core::{ConstU128, H160};
+use sp_core::{ConstU128, H160, ConstU8};
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
 	BuildStorage, MultiSignature,
@@ -212,6 +212,7 @@ impl pallet_bridge_relayers::Config for Test {
 	type Token = Balances;
 	type AssetHubParaId = ConstU32<1000>;
 	type EthereumNetwork = EthereumNetwork;
+	type InboundQueuePalletInstance = ConstU8<80>;
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
 	type AssetTransactor = SuccessfulTransactor;
