@@ -123,6 +123,8 @@ fn max_message_queue_service_weight_is_more_than_beacon_extrinsic_weights() {
 
 #[test]
 fn ethereum_client_consensus_extrinsics_work() {
+	println!("RuntimeBlockWeights: {:?}", bridge_hub_westend_runtime::RuntimeBlockWeights::get());
+
 	snowbridge_runtime_test_common::ethereum_extrinsic(
 		collator_session_keys(),
 		BRIDGE_HUB_WESTEND_PARACHAIN_ID,

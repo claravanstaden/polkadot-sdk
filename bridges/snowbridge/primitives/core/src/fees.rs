@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
-use crate::ParaId;
 use log;
 use sp_runtime::{DispatchResult, SaturatedConversion, Saturating, TokenError};
-use xcm::opaque::lts::{Junction::Parachain, Location, XcmContext};
+use xcm::opaque::lts::{Location, XcmContext};
 use xcm_executor::traits::TransactAsset;
 const LOG_TARGET: &str = "xcm_fees";
 
 /// Burns the fees embedded in the XCM for teleports.
-pub fn burn_fees<AssetTransactor, Balance>(para_id: ParaId, fee: Balance) -> DispatchResult
+pub fn burn_fees<AssetTransactor, Balance>(dest: Location, fee: Balance) -> DispatchResult
 where
 	AssetTransactor: TransactAsset,
 	Balance: Saturating + TryInto<u128> + Copy,
 {
 	let dummy_context = XcmContext { origin: None, message_id: Default::default(), topic: None };
-	let dest = Location::new(1, [Parachain(para_id.into())]);
+	//let dest = Location::new(1, [Parachain(para_id.into())]);
 	let fees = (Location::parent(), fee.saturated_into::<u128>()).into();
 
 	// Check if the asset can be checked out

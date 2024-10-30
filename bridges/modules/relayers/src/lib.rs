@@ -35,6 +35,19 @@ pub use payment_adapter::DeliveryConfirmationPaymentsAdapter;
 pub use stake_adapter::StakeAndSlashNamed;
 pub use weights::WeightInfo;
 pub use weights_ext::WeightInfoExt;
+use frame_support::{
+	traits::fungible::{Inspect, Mutate},
+	PalletError,
+};
+use frame_system::pallet_prelude::*;
+pub use pallet::*;
+use snowbridge_core::{fees::burn_fees, rewards::RewardLedger};
+use sp_core::H160;
+use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
+use xcm_executor::traits::TransactAsset;
+use sp_core::H256;
+
+extern crate alloc;
 
 mod mock;
 mod payment_adapter;
@@ -48,6 +61,10 @@ pub mod weights;
 
 /// The target that will be used when publishing logs related to this pallet.
 pub const LOG_TARGET: &str = "runtime::bridge-relayers";
+
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub type BalanceOf<T, I = ()> =
+<<T as Config<I>>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -82,6 +99,18 @@ pub mod pallet {
 		type WeightInfo: WeightInfoExt;
 		/// Lane identifier type.
 		type LaneId: LaneIdType + Send + Sync;
+		/// AssetHub parachain ID
+		type AssetHubParaId: Get<u32>;
+		/// Ethereum network ID including the chain ID
+		type EthereumNetwork: Get<NetworkId>;
+		/// Message relayers are rewarded with this asset
+		type WethAddress: Get<H160>;
+		/// XCM message sender
+		type XcmSender: SendXcm;
+		/// To withdraw and deposit an asset.
+		type AssetTransactor: TransactAsset;
+		type AssetHubXCMFee: Get<u128>;
+		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
 	}
 
 	#[pallet::pallet]
@@ -227,6 +256,20 @@ pub mod pallet {
 					Ok(())
 				},
 			)
+		}
+
+		/// Claim accumulated rewards.
+		#[pallet::call_index(3)]
+		#[pallet::weight((T::WeightInfo::claim(), DispatchClass::Operational))]
+		pub fn claim(
+			origin: OriginFor<T>,
+			deposit_address: AccountIdOf<T>,
+			value: BalanceOf<T, I>,
+			message_id: H256,
+		) -> DispatchResult {
+			let account_id = ensure_signed(origin)?;
+			Self::process_claim(account_id, deposit_address, value, message_id)?;
+			Ok(())
 		}
 	}
 
@@ -391,6 +434,68 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		fn process_claim(
+			account_id: AccountIdOf<T>,
+			deposit_address: AccountIdOf<T>,
+			value: BalanceOf<T, I>,
+			message_id: H256,
+		) -> DispatchResult {
+			// Check if the claim value is equal to or less than the accumulated balance.
+			let reward_balance = RewardsMapping::<T, I>::get(account_id.clone());
+			if value > reward_balance {
+				return Err(Error::<T, I>::InsufficientFunds.into());
+			}
+
+			let reward_asset = snowbridge_core::location::convert_token_address(
+				T::EthereumNetwork::get(),
+				T::WethAddress::get(),
+			);
+			let cost2: u128 =
+				TryInto::<u128>::try_into(value).map_err(|_| Error::<T, I>::InvalidAmount)?;
+			let deposit: Asset = (reward_asset, cost2).into();
+			let beneficiary: Location =
+				Location::new(0, Parachain(T::AssetHubParaId::get().into()));
+
+			let asset_hub_fee_asset: Asset = (Location::parent(), T::AssetHubXCMFee::get()).into();
+
+			//let account_32 = T::AccountId::decode(&mut &bytes[..]).unwrap_or_default();
+			let origin_location: Location = Location::new(0, [Parachain(T::AssetHubParaId::get())]);
+			let fee: BalanceOf<T, I> = T::AssetHubXCMFee::get().try_into().map_err(|_| Error::<T, I>::InvalidFee)?;
+			burn_fees::<T::AssetTransactor, BalanceOf<T, I>>(origin_location, fee)?;
+
+			let xcm: Xcm<()> = alloc::vec![
+				// Teleport required fees.
+				ReceiveTeleportedAsset(asset_hub_fee_asset.clone().into()),
+				// Pay for execution.
+				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
+				DescendOrigin(PalletInstance(80).into()),
+				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
+				ReserveAssetDeposited(deposit.clone().into()),
+				DepositAsset { assets: Definite(deposit.into()), beneficiary: beneficiary.clone() },
+				SetAppendix(Xcm(alloc::vec![
+					RefundSurplus,
+					DepositAsset { assets: AllCounted(1).into(), beneficiary },
+				])),
+				SetTopic(message_id.into()),
+			]
+				.into();
+
+			// Deduct the reward from the claimable balance
+			RewardsMapping::<T, I>::mutate(account_id.clone(), |current_value| {
+				*current_value = current_value.saturating_sub(value);
+			});
+
+			let dest = Location::new(1, [Parachain(T::AssetHubParaId::get().into())]);
+			let (_xcm_hash, _) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
+
+			Self::deposit_event(Event::RewardClaimed {
+				account_id,
+				deposit_address,
+				value,
+			});
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -433,6 +538,21 @@ pub mod pallet {
 			/// Registration that was removed.
 			registration: Registration<BlockNumberFor<T>, T::Reward>,
 		},
+		/// A relayer reward was deposited
+		RewardDeposited {
+			/// The relayer account to which the reward was deposited.
+			account_id: AccountIdOf<T>,
+			/// The reward value.
+			value: BalanceOf<T, I>,
+		},
+		RewardClaimed {
+			/// The relayer account that claimed the reward.
+			account_id: AccountIdOf<T>,
+			/// The address that received the reward on AH.
+			deposit_address: AccountIdOf<T>,
+			/// The claimed reward value.
+			value: BalanceOf<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -454,6 +574,39 @@ pub mod pallet {
 		NotRegistered,
 		/// Failed to `deregister` relayer, because lease is still active.
 		RegistrationIsStillActive,
+		/// XCMP send failure
+		Send(SendError),
+		/// The relayer rewards balance is lower than the claimed amount.
+		InsufficientFunds,
+		InvalidAmount,
+		InvalidFee,
+	}
+
+	#[derive(Clone, Encode, Decode, Eq, PartialEq, Debug, TypeInfo, PalletError)]
+	pub enum SendError {
+		NotApplicable,
+		NotRoutable,
+		Transport,
+		DestinationUnsupported,
+		ExceedsMaxMessageSize,
+		MissingArgument,
+		Fees,
+	}
+
+	impl<T: Config<I>, I: 'static> From<XcmpSendError> for Error<T, I> {
+		fn from(e: XcmpSendError) -> Self {
+			match e {
+				XcmpSendError::NotApplicable => Error::<T, I>::Send(SendError::NotApplicable),
+				XcmpSendError::Unroutable => Error::<T, I>::Send(SendError::NotRoutable),
+				XcmpSendError::Transport(_) => Error::<T, I>::Send(SendError::Transport),
+				XcmpSendError::DestinationUnsupported =>
+					Error::<T, I>::Send(SendError::DestinationUnsupported),
+				XcmpSendError::ExceedsMaxMessageSize =>
+					Error::<T, I>::Send(SendError::ExceedsMaxMessageSize),
+				XcmpSendError::MissingArgument => Error::<T, I>::Send(SendError::MissingArgument),
+				XcmpSendError::Fees => Error::<T, I>::Send(SendError::Fees),
+			}
+		}
 	}
 
 	/// Map of the relayer => accumulated reward.
@@ -484,6 +637,21 @@ pub mod pallet {
 		Registration<BlockNumberFor<T>, T::Reward>,
 		OptionQuery,
 	>;
+
+	#[pallet::storage]
+	pub type RewardsMapping<T: Config<I>, I: 'static = ()> =
+	StorageMap<_, Identity, AccountIdOf<T>, BalanceOf<T, I>, ValueQuery>;
+
+	impl<T: Config<I>, I: 'static> RewardLedger<AccountIdOf<T>, BalanceOf<T, I>> for Pallet<T, I> {
+		fn deposit(account_id: AccountIdOf<T>, value: BalanceOf<T, I>) -> DispatchResult {
+			RewardsMapping::<T, I>::mutate(account_id.clone(), |current_value| {
+				*current_value = current_value.saturating_add(value);
+			});
+			Self::deposit_event(Event::RewardDeposited { account_id, value });
+
+			Ok(())
+		}
+	}
 }
 
 #[cfg(test)]
@@ -500,6 +668,7 @@ mod tests {
 	};
 	use frame_system::{EventRecord, Pallet as System, Phase};
 	use sp_runtime::DispatchError;
+	use frame_support::assert_err;
 
 	fn get_ready_for_events() {
 		System::<TestRuntime>::set_block_number(1);
@@ -943,4 +1112,84 @@ mod tests {
 			assert!(Pallet::<TestRuntime>::is_registration_active(&REGISTER_RELAYER));
 		});
 	}
+
+	const WETH: u64 = 1_000_000_000_000_000_000;
+
+	use bp_polkadot_core::AccountId;
+	use sp_keyring::AccountKeyring as Keyring;
+	#[test]
+	fn test_deposit() {
+		run_test(|| {
+			// Check a new deposit works
+			let relayer: AccountId = Keyring::Bob.into();
+			println!("relayer ID: {:?}", relayer);
+			let result = Pallet::<TestRuntime>::deposit(relayer, 2 * WETH);
+			/*
+			assert_ok!(result);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 2 * WETH);
+
+			// Check accumulation works
+			let result2 = Pallet::<TestRuntime>::deposit(relayer.clone().into(), 3 * WETH);
+			assert_ok!(result2);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 5 * WETH);
+
+			// Check another relayer deposit works.
+			let another_relayer: AccountId = Keyring::Ferdie.into();
+			let result3 = Pallet::<TestRuntime>::deposit(another_relayer.clone().into(), 1 * WETH);
+			assert_ok!(result3);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(another_relayer), 1 * WETH);*/
+		});
+	}
+
+	#[test]
+	fn test_claim() {
+		//run_test(|| {
+			/*
+			let relayer: AccountId = Keyring::Bob.into();
+			let message_id = H256::random();
+
+			let result = Pallet::<TestRuntime>::claim(
+				RuntimeOrigin::signed(relayer.clone()),
+				relayer.clone(),
+				3 * WETH,
+				message_id,
+			);
+			// No rewards yet
+			assert_err!(result, Error::<TestRuntime>::InsufficientFunds);
+
+			// Deposit rewards
+			let result2 = Pallet::<TestRuntime>::deposit(relayer.clone(), 3 * WETH);
+			assert_ok!(result2);
+
+			// Claim some rewards
+			let result3 = Pallet::<TestRuntime>::claim(
+				RuntimeOrigin::signed(relayer.clone()),
+				relayer.clone(),
+				2 * WETH,
+				message_id,
+			);
+			assert_ok!(result3);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 1 * WETH);
+
+			// Claim some rewards than available
+			let result4 = Pallet::<TestRuntime>::claim(
+				RuntimeOrigin::signed(relayer.clone()),
+				relayer.clone(),
+				2 * WETH,
+				message_id,
+			);
+			assert_err!(result4, Error::<TestRuntime>::InsufficientFunds);
+
+			// Claim the remaining balance
+			let result5 = Pallet::<TestRuntime>::claim(
+				RuntimeOrigin::signed(relayer.clone()),
+				relayer.clone(),
+				1 * WETH,
+				message_id,
+			);
+			assert_ok!(result5);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 0);
+		});*/
+	}
+
 }

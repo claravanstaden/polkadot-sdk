@@ -5,7 +5,7 @@ use super::*;
 use codec::Encode;
 use frame_support::{derive_impl, parameter_types};
 use hex_literal::hex;
-use sp_core::{ConstU32, H160};
+use sp_core::{ConstU128, ConstU32, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, Verify},
 	BuildStorage, MultiSignature,
@@ -65,6 +65,7 @@ impl snowbridge_pallet_rewards::Config for Test {
 	type XcmSender = MockXcmSender;
 	type Token = Balances;
 	type AssetTransactor = SuccessfulTransactor;
+	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
 	type WeightInfo = ();
 }
 
@@ -93,8 +94,6 @@ impl SendXcm for MockXcmSender {
 		Ok(hash)
 	}
 }
-
-pub const WETH: u128 = 1_000_000_000_000_000_000;
 
 pub fn new_tester() -> sp_io::TestExternalities {
 	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();

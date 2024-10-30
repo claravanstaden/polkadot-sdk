@@ -210,3 +210,4 @@ mod tests {
 pub fn convert_token_address(network: NetworkId, token: H160) -> Location {
 	Location::new(2, [GlobalConsensus(network), AccountKey20 { network: None, key: token.into() }])
 }
+

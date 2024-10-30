@@ -48,6 +48,7 @@ pub mod pallet {
 		type XcmSender: SendXcm;
 		/// To withdraw and deposit an asset.
 		type AssetTransactor: TransactAsset;
+		type AssetHubXCMFee: Get<u128>;
 		/// Message relayers are rewarded with this asset
 		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
 		type WeightInfo: WeightInfo;
@@ -154,13 +155,13 @@ pub mod pallet {
 			let deposit: Asset = (reward_asset, cost2).into();
 			let beneficiary: Location =
 				Location::new(0, Parachain(T::AssetHubParaId::get().into()));
-			let bridge_location = Location::new(2, GlobalConsensus(T::EthereumNetwork::get()));
 
-			let xcm_fee: u128 = 10_000_000_000; // TODO not sure what this should be
-			let asset_hub_fee_asset: Asset = (Location::parent(), xcm_fee).into();
+			let asset_hub_fee_asset: Asset = (Location::parent(), T::AssetHubXCMFee::get()).into();
 
-			let fee: BalanceOf<T> = xcm_fee.try_into().map_err(|_| Error::<T>::InvalidFee)?;
-			burn_fees::<T::AssetTransactor, BalanceOf<T>>(T::AssetHubParaId::get().into(), fee)?;
+			let account_32 = T::AccountId::decode(&mut &bytes[..]).unwrap_or_default();
+			let origin_location = Location::new(0, [Parachain(T::AssetHubParaId::get().into()), AccountId32{network: None, id: account_id.into()}].into());
+			let fee: BalanceOf<T> = T::AssetHubXCMFee::get().try_into().map_err(|_| Error::<T>::InvalidFee)?;
+			burn_fees::<T::AssetTransactor, BalanceOf<T>>(origin_location, fee)?;
 
 			let xcm: Xcm<()> = alloc::vec![
 				// Teleport required fees.
@@ -173,7 +174,7 @@ pub mod pallet {
 				DepositAsset { assets: Definite(deposit.into()), beneficiary },
 				SetAppendix(Xcm(alloc::vec![
 					RefundSurplus,
-					DepositAsset { assets: AllCounted(1).into(), beneficiary: bridge_location },
+					DepositAsset { assets: AllCounted(1).into(), beneficiary: beneficiary },
 				])),
 				SetTopic(message_id.into()),
 			]
