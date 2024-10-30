@@ -20,6 +20,12 @@ use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
 use xcm_executor::traits::TransactAsset;
 use xcm_executor::AssetsInHolding;
+use sp_core::ConstU128;
+use bp_relayers::{
+	PayRewardFromAccount, RewardsAccountParams,
+};
+use bp_relayers::PaymentProcedure;
+use bp_messages::{HashedLaneId, LaneIdType};
 
 use crate::{self as inbound_queue};
 
@@ -32,7 +38,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		EthereumBeaconClient: snowbridge_pallet_ethereum_client::{Pallet, Call, Storage, Event<T>},
-		EthereumRewards: snowbridge_pallet_rewards::{Pallet, Call, Storage, Event<T>},
+		BridgeRelayers: pallet_bridge_relayers::{Pallet, Call, Storage, Event<T>},
 		InboundQueue: inbound_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -178,15 +184,45 @@ parameter_types! {
 	pub WethAddress: H160 = hex!("774667629726ec1FaBEbCEc0D9139bD1C8f72a23").into();
 }
 
-impl snowbridge_pallet_rewards::Config for Test {
+pub type TestLaneIdType = HashedLaneId;
+
+pub struct TestPaymentProcedure;
+
+
+impl TestPaymentProcedure {
+	pub fn rewards_account(params: RewardsAccountParams<TestLaneIdType>) -> AccountId {
+		PayRewardFromAccount::<(), AccountId, TestLaneIdType>::rewards_account(params)
+	}
+}
+
+impl PaymentProcedure<AccountId, Balance> for TestPaymentProcedure {
+	type Error = ();
+	type LaneId = TestLaneIdType;
+
+	fn pay_reward(
+		relayer: &AccountId,
+		_lane_id: RewardsAccountParams<Self::LaneId>,
+		_reward: Balance,
+	) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+impl pallet_bridge_relayers::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type Reward = Balance;
+	type PaymentProcedure = TestPaymentProcedure;
+	type StakeAndSlash = ();
+	type WeightInfo = ();
+	type LaneId = TestLaneIdType;
+	type Token = Balances;
 	type AssetHubParaId = ConstU32<1000>;
 	type EthereumNetwork = EthereumNetwork;
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
+
 	type AssetTransactor = SuccessfulTransactor;
-	type Token = Balances;
-	type WeightInfo = ();
+	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
 }
 
 pub fn last_events(n: usize) -> Vec<RuntimeEvent> {

@@ -110,7 +110,6 @@ snowbridge-core = { workspace = true }
 snowbridge-pallet-ethereum-client = { workspace = true }
 snowbridge-pallet-inbound-queue = { workspace = true }
 snowbridge-pallet-outbound-queue = { workspace = true }
-snowbridge-pallet-rewards = { workspace = true }
 snowbridge-outbound-queue-runtime-api = { workspace = true }
 snowbridge-router-primitives = { workspace = true }
 snowbridge-runtime-common = { workspace = true }
@@ -118,7 +117,6 @@ snowbridge-pallet-inbound-queue-v2 = { workspace = true }
 snowbridge-pallet-outbound-queue-v2 = { workspace = true }
 snowbridge-outbound-queue-runtime-api-v2 = { workspace = true }
 snowbridge-merkle-tree = { workspace = true }
-
 
 [dev-dependencies]
 bridge-hub-test-utils = { workspace = true, default-features = true }

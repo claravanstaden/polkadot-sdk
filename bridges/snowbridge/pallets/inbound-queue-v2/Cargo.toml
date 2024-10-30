@@ -44,7 +44,9 @@ snowbridge-pallet-inbound-queue-fixtures-v2 = { optional = true, workspace = tru
 frame-benchmarking = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
 snowbridge-pallet-ethereum-client = { workspace = true, default-features = true }
-snowbridge-pallet-rewards = { workspace = true, default-features = true }
+pallet-bridge-relayers = { workspace = true, default-features = true }
+bp-relayers = { workspace = true, default-features = true }
+bp-messages = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
 
 [features]
