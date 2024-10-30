@@ -15,13 +15,13 @@
 use crate::imports::*;
 use bridge_hub_westend_runtime::EthereumInboundQueue;
 use hex_literal::hex;
+use snowbridge_core::rewards::RewardLedger;
 use snowbridge_router_primitives::inbound::{
 	v1::{Command, Destination, MessageV1, VersionedMessage},
 	GlobalConsensusEthereumConvertsFor,
 };
 use sp_core::H256;
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
-use snowbridge_core::rewards::RewardLedger;
 
 const INITIAL_FUND: u128 = 5_000_000_000_000;
 pub const CHAIN_ID: u64 = 11155111;
@@ -193,8 +193,7 @@ fn claim_rewards_works() {
 
 		let relayer = BridgeHubWestendSender::get();
 		let reward_address = AssetHubWestendReceiver::get();
-		type EthereumRewards =
-		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
+		type EthereumRewards = <BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
 		assert_ok!(EthereumRewards::deposit(relayer.clone().into(), 2 * ETH));
 
 		// Check that the message was sent
@@ -206,7 +205,12 @@ fn claim_rewards_works() {
 		);
 
 		let message_id = H256::random();
-		let result = EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), reward_address.clone(), ETH, message_id);
+		let result = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			reward_address.clone(),
+			ETH,
+			message_id,
+		);
 		assert_ok!(result);
 
 		let events = BridgeHubWestend::events();
@@ -230,16 +234,14 @@ fn claim_rewards_works() {
 }
 
 #[test]
-fn claiming_more_than_accrued_rewards_errors(
-) {
+fn claiming_more_than_accrued_rewards_errors() {
 	BridgeHubWestend::execute_with(|| {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		type RuntimeOrigin = <BridgeHubWestend as Chain>::RuntimeOrigin;
 
 		let relayer = BridgeHubWestendSender::get();
 		let reward_address = AssetHubWestendReceiver::get();
-		type EthereumRewards =
-		<BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
+		type EthereumRewards = <BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
 		assert_ok!(EthereumRewards::deposit(relayer.clone().into(), 2 * ETH));
 
 		// Check that the message was sent
@@ -251,11 +253,19 @@ fn claiming_more_than_accrued_rewards_errors(
 		);
 
 		let message_id = H256::random();
-		let result = EthereumRewards::claim(RuntimeOrigin::signed(relayer.clone()), reward_address.clone(), 3 * ETH, message_id);
-		assert_err!(result, DispatchError::Module(sp_runtime::ModuleError {
-			index: 86,
-			error: [1, 0, 0, 0],
-			message: Some("InsufficientFunds")
-		}));
+		let result = EthereumRewards::claim(
+			RuntimeOrigin::signed(relayer.clone()),
+			reward_address.clone(),
+			3 * ETH,
+			message_id,
+		);
+		assert_err!(
+			result,
+			DispatchError::Module(sp_runtime::ModuleError {
+				index: 86,
+				error: [1, 0, 0, 0],
+				message: Some("InsufficientFunds")
+			})
+		);
 	});
 }

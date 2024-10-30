@@ -9,6 +9,9 @@ use frame_support::{
 	BoundedVec,
 };
 
+use bp_messages::HashedLaneId;
+use bp_relayers::{PayRewardFromAccount, PaymentProcedure, RewardsAccountParams};
+use codec::Encode;
 use hex_literal::hex;
 use snowbridge_core::{
 	gwei,
@@ -18,12 +21,17 @@ use snowbridge_core::{
 	pricing::{PricingParameters, Rewards},
 	ParaId,
 };
-use sp_core::{ConstU32, H160, H256};
+use sp_core::{ConstU128, ConstU32, H160, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 	AccountId32, BuildStorage, FixedU128,
 };
 use sp_std::marker::PhantomData;
+use xcm::{
+	latest::SendXcm,
+	prelude::{SendError as XcmpSendError, *},
+};
+use xcm_executor::{traits::TransactAsset, AssetsInHolding};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
@@ -32,8 +40,10 @@ frame_support::construct_runtime!(
 	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 		OutboundQueue: crate::{Pallet, Storage, Event<T>},
+		BridgeRelayers: pallet_bridge_relayers::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -47,6 +57,7 @@ impl frame_system::Config for Test {
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
+	type AccountData = pallet_balances::AccountData<u128>;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Nonce = u64;
@@ -72,6 +83,17 @@ impl pallet_message_queue::Config for Test {
 	type QueuePausedQuery = ();
 }
 
+parameter_types! {
+	pub const ExistentialDeposit: u128 = 1;
+}
+
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
+impl pallet_balances::Config for Test {
+	type Balance = Balance;
+	type ExistentialDeposit = ExistentialDeposit;
+	type AccountStore = System;
+}
+
 // Mock verifier
 pub struct MockVerifier;
 
@@ -94,6 +116,8 @@ parameter_types! {
 	pub const GatewayAddress: H160 = H160(GATEWAY_ADDRESS);
 }
 
+type Balance = u128;
+
 pub const DOT: u128 = 10_000_000_000;
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -107,7 +131,81 @@ impl crate::Config for Test {
 	type Balance = u128;
 	type WeightToFee = IdentityFee<u128>;
 	type WeightInfo = ();
-	type RewardLedger = ();
+	type Token = Balances;
+	type RewardLedger = BridgeRelayers;
+}
+
+parameter_types! {
+	pub WethAddress: H160 = hex!("774667629726ec1FaBEbCEc0D9139bD1C8f72a23").into();
+}
+
+pub type TestLaneIdType = HashedLaneId;
+
+pub struct TestPaymentProcedure;
+
+impl TestPaymentProcedure {
+	pub fn rewards_account(params: RewardsAccountParams<TestLaneIdType>) -> AccountId {
+		PayRewardFromAccount::<(), AccountId, TestLaneIdType>::rewards_account(params)
+	}
+}
+
+impl PaymentProcedure<AccountId, Balance> for TestPaymentProcedure {
+	type Error = ();
+	type LaneId = TestLaneIdType;
+
+	fn pay_reward(
+		_relayer: &AccountId,
+		_lane_id: RewardsAccountParams<Self::LaneId>,
+		_reward: Balance,
+	) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+parameter_types! {
+	pub const EthereumNetwork: xcm::v3::NetworkId = xcm::v3::NetworkId::Ethereum { chain_id: 11155111 };
+}
+
+impl pallet_bridge_relayers::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type Reward = Balance;
+	type PaymentProcedure = TestPaymentProcedure;
+	type StakeAndSlash = ();
+	type WeightInfo = ();
+	type LaneId = TestLaneIdType;
+	type Token = Balances;
+	type AssetHubParaId = ConstU32<1000>;
+	type EthereumNetwork = EthereumNetwork;
+	type WethAddress = WethAddress;
+	type XcmSender = MockXcmSender;
+
+	type AssetTransactor = SuccessfulTransactor;
+	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
+}
+
+// Mock XCM sender that always succeeds
+pub struct MockXcmSender;
+
+impl SendXcm for MockXcmSender {
+	type Ticket = Xcm<()>;
+
+	fn validate(
+		dest: &mut Option<Location>,
+		xcm: &mut Option<Xcm<()>>,
+	) -> SendResult<Self::Ticket> {
+		if let Some(location) = dest {
+			match location.unpack() {
+				_ => Ok((xcm.clone().unwrap(), Assets::default())),
+			}
+		} else {
+			Ok((xcm.clone().unwrap(), Assets::default()))
+		}
+	}
+
+	fn deliver(xcm: Self::Ticket) -> core::result::Result<XcmHash, XcmpSendError> {
+		let hash = xcm.using_encoded(sp_io::hashing::blake2_256);
+		Ok(hash)
+	}
 }
 
 fn setup() {
@@ -191,5 +289,37 @@ pub fn mock_message(sibling_para_id: u32) -> Message {
 			amount: 0,
 		}])
 		.unwrap(),
+	}
+}
+
+pub struct SuccessfulTransactor;
+impl TransactAsset for SuccessfulTransactor {
+	fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn can_check_out(_dest: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+		Ok(())
+	}
+
+	fn deposit_asset(_what: &Asset, _who: &Location, _context: Option<&XcmContext>) -> XcmResult {
+		Ok(())
+	}
+
+	fn withdraw_asset(
+		_what: &Asset,
+		_who: &Location,
+		_context: Option<&XcmContext>,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
+	}
+
+	fn internal_transfer_asset(
+		_what: &Asset,
+		_from: &Location,
+		_to: &Location,
+		_context: &XcmContext,
+	) -> Result<AssetsInHolding, XcmError> {
+		Ok(AssetsInHolding::default())
 	}
 }

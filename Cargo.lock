@@ -21143,12 +21143,16 @@ version = "0.2.0"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
+ "bp-messages",
+ "bp-relayers",
  "bridge-hub-common",
  "ethabi-decode",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "hex-literal",
+ "pallet-balances",
+ "pallet-bridge-relayers",
  "pallet-message-queue",
  "parity-scale-codec",
  "scale-info",
@@ -21161,6 +21165,8 @@ dependencies = [
  "sp-keyring",
  "sp-runtime 31.0.1",
  "sp-std 14.0.0",
+ "staging-xcm",
+ "staging-xcm-executor",
 ]
 
 [[package]]

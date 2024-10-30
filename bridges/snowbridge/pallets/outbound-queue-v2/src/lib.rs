@@ -109,13 +109,18 @@ use codec::Decode;
 use envelope::Envelope;
 use frame_support::{
 	storage::StorageStreamIter,
-	traits::{tokens::Balance, EnqueueMessage, Get, ProcessMessageError},
+	traits::{
+		fungible::{Inspect, Mutate},
+		tokens::Balance,
+		EnqueueMessage, Get, ProcessMessageError,
+	},
 	weights::{Weight, WeightToFee},
 };
 use snowbridge_core::{
 	inbound::Message as DeliveryMessage,
 	outbound::v2::{CommandWrapper, Fee, GasMeter, InboundMessage, Message},
-	BasicOperatingMode, rewards::RewardLedger,
+	rewards::RewardLedger,
+	BasicOperatingMode,
 };
 use snowbridge_merkle_tree::merkle_root;
 use sp_core::H256;
@@ -126,7 +131,6 @@ use sp_runtime::{
 use sp_std::prelude::*;
 pub use types::{PendingOrder, ProcessMessageOriginOf};
 pub use weights::WeightInfo;
-use frame_support::traits::fungible::{Inspect, Mutate};
 
 pub use pallet::*;
 
@@ -328,7 +332,8 @@ pub mod pallet {
 			let account = T::AccountId::decode(&mut &envelope.reward_address[..]).unwrap_or(
 				T::AccountId::decode(&mut TrailingZeroInput::zeroes()).expect("zero address"),
 			);
-			T::RewardLedger::deposit(account, order.fee.into())?;
+			let fee: BalanceOf<T> = order.fee.try_into().map_err(|_| <Error<T>>::InvalidFee)?;
+			T::RewardLedger::deposit(account, fee)?;
 
 			<PendingOrders<T>>::remove(nonce);
 

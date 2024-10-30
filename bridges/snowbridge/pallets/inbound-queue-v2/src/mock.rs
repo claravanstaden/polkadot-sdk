@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
 use super::*;
 
+use bp_messages::{HashedLaneId, LaneIdType};
+use bp_relayers::{PayRewardFromAccount, PaymentProcedure, RewardsAccountParams};
 use frame_support::{derive_impl, parameter_types, traits::ConstU32};
 use hex_literal::hex;
 use snowbridge_beacon_primitives::{
@@ -11,21 +13,14 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use sp_core::H160;
+use sp_core::{ConstU128, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
 	BuildStorage, MultiSignature,
 };
 use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
-use xcm_executor::traits::TransactAsset;
-use xcm_executor::AssetsInHolding;
-use sp_core::ConstU128;
-use bp_relayers::{
-	PayRewardFromAccount, RewardsAccountParams,
-};
-use bp_relayers::PaymentProcedure;
-use bp_messages::{HashedLaneId, LaneIdType};
+use xcm_executor::{traits::TransactAsset, AssetsInHolding};
 
 use crate::{self as inbound_queue};
 
@@ -38,8 +33,8 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		EthereumBeaconClient: snowbridge_pallet_ethereum_client::{Pallet, Call, Storage, Event<T>},
-		BridgeRelayers: pallet_bridge_relayers::{Pallet, Call, Storage, Event<T>},
 		InboundQueue: inbound_queue::{Pallet, Call, Storage, Event<T>},
+		BridgeRelayers: pallet_bridge_relayers::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -177,7 +172,7 @@ impl inbound_queue::Config for Test {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Test;
 	type Token = Balances;
-	type RewardLedger = ();
+	type RewardLedger = BridgeRelayers;
 }
 
 parameter_types! {
@@ -187,7 +182,6 @@ parameter_types! {
 pub type TestLaneIdType = HashedLaneId;
 
 pub struct TestPaymentProcedure;
-
 
 impl TestPaymentProcedure {
 	pub fn rewards_account(params: RewardsAccountParams<TestLaneIdType>) -> AccountId {
@@ -220,7 +214,6 @@ impl pallet_bridge_relayers::Config for Test {
 	type EthereumNetwork = EthereumNetwork;
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
-
 	type AssetTransactor = SuccessfulTransactor;
 	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
 }
