@@ -40,12 +40,10 @@ use frame_support::{
 	PalletError,
 };
 use frame_system::pallet_prelude::*;
-pub use pallet::*;
-use snowbridge_core::{fees::burn_fees, rewards::RewardLedger};
+use snowbridge_core::rewards::RewardLedger;
 use sp_core::H160;
 use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
 use xcm_executor::traits::TransactAsset;
-use sp_core::H256;
 
 extern crate alloc;
 
@@ -71,7 +69,6 @@ pub mod pallet {
 	use super::*;
 	use bp_messages::LaneIdType;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	/// `RelayerRewardsKeyProvider` for given configuration.
 	type RelayerRewardsKeyProviderOf<T, I> = RelayerRewardsKeyProvider<
@@ -263,12 +260,10 @@ pub mod pallet {
 		#[pallet::weight((T::WeightInfo::claim(), DispatchClass::Operational))]
 		pub fn claim(
 			origin: OriginFor<T>,
-			deposit_address: AccountIdOf<T>,
-			value: BalanceOf<T, I>,
-			message_id: H256,
+			deposit_location: Location,
 		) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
-			Self::process_claim(account_id, deposit_address, value, message_id)?;
+			Self::process_claim(account_id, deposit_location)?;
 			Ok(())
 		}
 	}
@@ -437,61 +432,44 @@ pub mod pallet {
 
 		fn process_claim(
 			account_id: AccountIdOf<T>,
-			deposit_address: AccountIdOf<T>,
-			value: BalanceOf<T, I>,
-			message_id: H256,
+			deposit_location: Location,
 		) -> DispatchResult {
-			// Check if the claim value is equal to or less than the accumulated balance.
-			let reward_balance = RewardsMapping::<T, I>::get(account_id.clone());
-			if value > reward_balance {
+			let value = RewardsMapping::<T, I>::get(account_id.clone());
+			if value.is_zero() {
 				return Err(Error::<T, I>::InsufficientFunds.into());
 			}
-
 			let reward_asset = snowbridge_core::location::convert_token_address(
 				T::EthereumNetwork::get(),
 				T::WethAddress::get(),
 			);
-			let cost2: u128 =
+			let reward_balance: u128 =
 				TryInto::<u128>::try_into(value).map_err(|_| Error::<T, I>::InvalidAmount)?;
-			let deposit: Asset = (reward_asset, cost2).into();
-			let beneficiary: Location =
-				Location::new(0, Parachain(T::AssetHubParaId::get().into()));
+			let deposit: Asset = (reward_asset, reward_balance).into();
 
 			let asset_hub_fee_asset: Asset = (Location::parent(), T::AssetHubXCMFee::get()).into();
 
-			//let account_32 = T::AccountId::decode(&mut &bytes[..]).unwrap_or_default();
-			let origin_location: Location = Location::new(0, [Parachain(T::AssetHubParaId::get())]);
-			let fee: BalanceOf<T, I> = T::AssetHubXCMFee::get().try_into().map_err(|_| Error::<T, I>::InvalidFee)?;
-			burn_fees::<T::AssetTransactor, BalanceOf<T, I>>(origin_location, fee)?;
-
 			let xcm: Xcm<()> = alloc::vec![
-				// Teleport required fees.
-				ReceiveTeleportedAsset(asset_hub_fee_asset.clone().into()),
-				// Pay for execution.
-				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
 				DescendOrigin(PalletInstance(80).into()),
 				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
 				ReserveAssetDeposited(deposit.clone().into()),
-				DepositAsset { assets: Definite(deposit.into()), beneficiary: beneficiary.clone() },
+				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
+				DepositAsset { assets: AllCounted(1).into(), beneficiary: deposit_location.clone() },
 				SetAppendix(Xcm(alloc::vec![
 					RefundSurplus,
-					DepositAsset { assets: AllCounted(1).into(), beneficiary },
+					DepositAsset { assets: AllCounted(1).into(), beneficiary: deposit_location.clone() },
 				])),
-				SetTopic(message_id.into()),
 			]
 				.into();
 
-			// Deduct the reward from the claimable balance
-			RewardsMapping::<T, I>::mutate(account_id.clone(), |current_value| {
-				*current_value = current_value.saturating_sub(value);
-			});
+			// Remove the reward since it has been claimed.
+			RewardsMapping::<T, I>::remove(account_id.clone());
 
 			let dest = Location::new(1, [Parachain(T::AssetHubParaId::get().into())]);
 			let (_xcm_hash, _) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
 
 			Self::deposit_event(Event::RewardClaimed {
 				account_id,
-				deposit_address,
+				deposit_location,
 				value,
 			});
 			Ok(())
@@ -548,8 +526,8 @@ pub mod pallet {
 		RewardClaimed {
 			/// The relayer account that claimed the reward.
 			account_id: AccountIdOf<T>,
-			/// The address that received the reward on AH.
-			deposit_address: AccountIdOf<T>,
+			/// The location that received the reward on AH.
+			deposit_location: Location,
 			/// The claimed reward value.
 			value: BalanceOf<T, I>,
 		},
@@ -579,7 +557,6 @@ pub mod pallet {
 		/// The relayer rewards balance is lower than the claimed amount.
 		InsufficientFunds,
 		InvalidAmount,
-		InvalidFee,
 	}
 
 	#[derive(Clone, Encode, Decode, Eq, PartialEq, Debug, TypeInfo, PalletError)]
@@ -657,6 +634,7 @@ pub mod pallet {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_core::H256;
 	use bp_messages::LaneIdType;
 	use mock::{RuntimeEvent as TestEvent, *};
 
@@ -1141,13 +1119,12 @@ mod tests {
 	fn test_claim() {
 		run_test(|| {
 			let relayer: u64 = 1;
-			let message_id = H256::random();
+			let interior: InteriorLocation = [Parachain(1000), Junction::AccountId32{network: None, id: H256::random().into()}].into();
+			let claim_location = Location::new(1, interior);
 
 			let result = Pallet::<TestRuntime>::claim(
 				RuntimeOrigin::signed(relayer),
-				relayer,
-				3 * WETH,
-				message_id,
+				claim_location.clone(),
 			);
 			// No rewards yet
 			assert_err!(result, Error::<TestRuntime>::InsufficientFunds);
@@ -1156,33 +1133,12 @@ mod tests {
 			let result2 = Pallet::<TestRuntime>::deposit(relayer, 3 * WETH);
 			assert_ok!(result2);
 
-			// Claim some rewards
+			// Claim rewards
 			let result3 = Pallet::<TestRuntime>::claim(
 				RuntimeOrigin::signed(relayer),
-				relayer,
-				2 * WETH,
-				message_id,
+				claim_location,
 			);
 			assert_ok!(result3);
-			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 1 * WETH);
-
-			// Claim some rewards than available
-			let result4 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer),
-				relayer,
-				2 * WETH,
-				message_id,
-			);
-			assert_err!(result4, Error::<TestRuntime>::InsufficientFunds);
-
-			// Claim the remaining balance
-			let result5 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer),
-				relayer,
-				1 * WETH,
-				message_id,
-			);
-			assert_ok!(result5);
 			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 0);
 		});
 	}
