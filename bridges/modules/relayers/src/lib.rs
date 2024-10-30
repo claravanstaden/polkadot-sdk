@@ -1115,42 +1115,37 @@ mod tests {
 
 	const WETH: u64 = 1_000_000_000_000_000_000;
 
-	use bp_polkadot_core::AccountId;
-	use sp_keyring::AccountKeyring as Keyring;
 	#[test]
 	fn test_deposit() {
 		run_test(|| {
 			// Check a new deposit works
-			let relayer: AccountId = Keyring::Bob.into();
-			println!("relayer ID: {:?}", relayer);
+			let relayer: u64 = 1;
 			let result = Pallet::<TestRuntime>::deposit(relayer, 2 * WETH);
-			/*
 			assert_ok!(result);
-			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 2 * WETH);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 2 * WETH);
 
 			// Check accumulation works
-			let result2 = Pallet::<TestRuntime>::deposit(relayer.clone().into(), 3 * WETH);
+			let result2 = Pallet::<TestRuntime>::deposit(relayer, 3 * WETH);
 			assert_ok!(result2);
 			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 5 * WETH);
 
 			// Check another relayer deposit works.
-			let another_relayer: AccountId = Keyring::Ferdie.into();
-			let result3 = Pallet::<TestRuntime>::deposit(another_relayer.clone().into(), 1 * WETH);
+			let another_relayer: u64 = 2;
+			let result3 = Pallet::<TestRuntime>::deposit(another_relayer, 1 * WETH);
 			assert_ok!(result3);
-			assert_eq!(<RewardsMapping<TestRuntime>>::get(another_relayer), 1 * WETH);*/
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(another_relayer), 1 * WETH);
 		});
 	}
 
 	#[test]
 	fn test_claim() {
-		//run_test(|| {
-			/*
-			let relayer: AccountId = Keyring::Bob.into();
+		run_test(|| {
+			let relayer: u64 = 1;
 			let message_id = H256::random();
 
 			let result = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer.clone()),
-				relayer.clone(),
+				RuntimeOrigin::signed(relayer),
+				relayer,
 				3 * WETH,
 				message_id,
 			);
@@ -1158,23 +1153,23 @@ mod tests {
 			assert_err!(result, Error::<TestRuntime>::InsufficientFunds);
 
 			// Deposit rewards
-			let result2 = Pallet::<TestRuntime>::deposit(relayer.clone(), 3 * WETH);
+			let result2 = Pallet::<TestRuntime>::deposit(relayer, 3 * WETH);
 			assert_ok!(result2);
 
 			// Claim some rewards
 			let result3 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer.clone()),
-				relayer.clone(),
+				RuntimeOrigin::signed(relayer),
+				relayer,
 				2 * WETH,
 				message_id,
 			);
 			assert_ok!(result3);
-			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 1 * WETH);
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 1 * WETH);
 
 			// Claim some rewards than available
 			let result4 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer.clone()),
-				relayer.clone(),
+				RuntimeOrigin::signed(relayer),
+				relayer,
 				2 * WETH,
 				message_id,
 			);
@@ -1182,14 +1177,14 @@ mod tests {
 
 			// Claim the remaining balance
 			let result5 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer.clone()),
-				relayer.clone(),
+				RuntimeOrigin::signed(relayer),
+				relayer,
 				1 * WETH,
 				message_id,
 			);
 			assert_ok!(result5);
-			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer.clone()), 0);
-		});*/
+			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 0);
+		});
 	}
 
 }
