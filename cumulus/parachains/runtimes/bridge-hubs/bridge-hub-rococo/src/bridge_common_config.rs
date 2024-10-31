@@ -24,6 +24,12 @@
 use super::{weights, AccountId, Balance, Balances, BlockNumber, Runtime, RuntimeEvent};
 use bp_parachains::SingleParaStoredHeaderDataBuilder;
 use frame_support::{parameter_types, traits::ConstU32};
+use testnet_parachains_constants::rococo::snowbridge::EthereumNetwork;
+use sp_core::H160;
+use crate::xcm_config;
+use crate::XcmRouter;
+use sp_runtime::traits::ConstU128;
+use sp_runtime::traits::ConstU8;
 
 parameter_types! {
 	pub const RelayChainHeadersToKeep: u32 = 1024;
@@ -83,6 +89,17 @@ impl pallet_bridge_relayers::Config<RelayersForLegacyLaneIdsMessagesInstance> fo
 	>;
 	type WeightInfo = weights::pallet_bridge_relayers::WeightInfo<Runtime>;
 	type LaneId = bp_messages::LegacyLaneId;
+	type AssetHubParaId = ConstU32<ASSET_HUB_ID>;
+	type EthereumNetwork = EthereumNetwork;
+	type WethAddress = WethAddress;
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	type XcmSender = XcmRouter;
+	#[cfg(feature = "runtime-benchmarks")]
+	type XcmSender = DoNothingRouter;
+	type Token = Balances;
+	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
+	type InboundQueuePalletInstance = ConstU8<80>;
+	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
 }
 
 /// Allows collect and claim rewards for relayers
@@ -105,7 +122,25 @@ impl pallet_bridge_relayers::Config<RelayersForPermissionlessLanesInstance> for 
 	>;
 	type WeightInfo = weights::pallet_bridge_relayers::WeightInfo<Runtime>;
 	type LaneId = bp_messages::HashedLaneId;
+	type AssetHubParaId = ConstU32<ASSET_HUB_ID>;
+	type EthereumNetwork = EthereumNetwork;
+	type WethAddress = WethAddress;
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	type XcmSender = XcmRouter;
+	#[cfg(feature = "runtime-benchmarks")]
+	type XcmSender = DoNothingRouter;
+	type Token = Balances;
+	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
+	type InboundQueuePalletInstance = ConstU8<80>;
+	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
 }
+
+parameter_types! {
+	pub WethAddress: H160 = H160(hex_literal::hex!("fff9976782d46cc05630d1f6ebab18b2324d6b14"));
+}
+
+pub const ASSET_HUB_ID: u32 = rococo_runtime_constants::system_parachain::ASSET_HUB_ID;
+
 
 /// Add GRANDPA bridge pallet to track Rococo Bulletin chain.
 pub type BridgeGrandpaRococoBulletinInstance = pallet_bridge_grandpa::Instance4;

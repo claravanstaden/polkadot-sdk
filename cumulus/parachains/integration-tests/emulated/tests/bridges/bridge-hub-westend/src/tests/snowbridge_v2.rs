@@ -18,9 +18,7 @@ use hex_literal::hex;
 use snowbridge_core::rewards::RewardLedger;
 use snowbridge_router_primitives::inbound::{
 	v1::{Command, Destination, MessageV1, VersionedMessage},
-	GlobalConsensusEthereumConvertsFor,
 };
-use sp_core::H256;
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
 
 const INITIAL_FUND: u128 = 5_000_000_000_000;
@@ -193,23 +191,21 @@ fn claim_rewards_works() {
 
 		let relayer = BridgeHubWestendSender::get();
 		let reward_address = AssetHubWestendReceiver::get();
-		type EthereumRewards = <BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
-		assert_ok!(EthereumRewards::deposit(relayer.clone().into(), 2 * ETH));
+		type BridgeRelayers = <BridgeHubWestend as BridgeHubWestendPallet>::BridgeRelayers;
+		assert_ok!(BridgeRelayers::deposit(relayer.clone().into(), 2 * ETH));
 
 		// Check that the message was sent
 		assert_expected_events!(
 			BridgeHubWestend,
 			vec![
-				RuntimeEvent::EthereumRewards(snowbridge_pallet_rewards::Event::RewardDeposited { .. }) => {},
+				RuntimeEvent::BridgeRelayers(pallet_bridge_relayers::Event::RewardDeposited { .. }) => {},
 			]
 		);
 
-		let message_id = H256::random();
-		let result = EthereumRewards::claim(
+		let relayer_location = Location::new(1, [Parachain(1000), Junction::AccountId32{ id: reward_address.into(), network: None}]);
+		let result = BridgeRelayers::claim(
 			RuntimeOrigin::signed(relayer.clone()),
-			reward_address.clone(),
-			ETH,
-			message_id,
+			relayer_location.clone(),
 		);
 		assert_ok!(result);
 
@@ -217,8 +213,8 @@ fn claim_rewards_works() {
 		assert!(
 			events.iter().any(|event| matches!(
 				event,
-				RuntimeEvent::EthereumRewards(snowbridge_pallet_rewards::Event::RewardClaimed { account_id, deposit_address, value, message_id: _ })
-					if *account_id == relayer && *deposit_address == reward_address && *value == ETH,
+				RuntimeEvent::BridgeRelayers(pallet_bridge_relayers::Event::RewardClaimed { account_id, deposit_location, value, })
+					if *account_id == relayer && *deposit_location == relayer_location && *value > 1 *ETH,
 			)),
 			"RewardClaimed event with correct fields."
 		);
@@ -231,41 +227,4 @@ fn claim_rewards_works() {
 			vec![RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { .. }) => {},]
 		);
 	})
-}
-
-#[test]
-fn claiming_more_than_accrued_rewards_errors() {
-	BridgeHubWestend::execute_with(|| {
-		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
-		type RuntimeOrigin = <BridgeHubWestend as Chain>::RuntimeOrigin;
-
-		let relayer = BridgeHubWestendSender::get();
-		let reward_address = AssetHubWestendReceiver::get();
-		type EthereumRewards = <BridgeHubWestend as BridgeHubWestendPallet>::EthereumRewards;
-		assert_ok!(EthereumRewards::deposit(relayer.clone().into(), 2 * ETH));
-
-		// Check that the message was sent
-		assert_expected_events!(
-			BridgeHubWestend,
-			vec![
-				RuntimeEvent::EthereumRewards(snowbridge_pallet_rewards::Event::RewardDeposited { .. }) => {},
-			]
-		);
-
-		let message_id = H256::random();
-		let result = EthereumRewards::claim(
-			RuntimeOrigin::signed(relayer.clone()),
-			reward_address.clone(),
-			3 * ETH,
-			message_id,
-		);
-		assert_err!(
-			result,
-			DispatchError::Module(sp_runtime::ModuleError {
-				index: 86,
-				error: [1, 0, 0, 0],
-				message: Some("InsufficientFunds")
-			})
-		);
-	});
 }

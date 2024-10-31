@@ -439,21 +439,21 @@ pub mod pallet {
 			if value.is_zero() {
 				return Err(Error::<T, I>::InsufficientFunds.into());
 			}
-			let reward_asset = snowbridge_core::location::convert_token_address(
+			let reward_balance: u128 =
+				TryInto::<u128>::try_into(value).map_err(|_| Error::<T, I>::InvalidAmount)?;
+
+			let reward_location = snowbridge_core::location::convert_token_address(
 				T::EthereumNetwork::get(),
 				T::WethAddress::get(),
 			);
-			let reward_balance: u128 =
-				TryInto::<u128>::try_into(value).map_err(|_| Error::<T, I>::InvalidAmount)?;
-			let deposit: Asset = (reward_asset, reward_balance).into();
-
-			let asset_hub_fee_asset: Asset = (Location::parent(), T::AssetHubXCMFee::get()).into();
+			let reward_asset: Asset = (reward_location.clone(), reward_balance).into();
+			let fee_asset: Asset = (reward_location, T::AssetHubXCMFee::get()).into();
 
 			let xcm: Xcm<()> = alloc::vec![
 				DescendOrigin(PalletInstance(T::InboundQueuePalletInstance::get()).into()),
 				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
-				ReserveAssetDeposited(deposit.clone().into()),
-				BuyExecution { fees: asset_hub_fee_asset, weight_limit: Unlimited },
+				ReserveAssetDeposited(reward_asset.clone().into()),
+				BuyExecution { fees: fee_asset, weight_limit: Unlimited },
 				DepositAsset { assets: AllCounted(1).into(), beneficiary: deposit_location.clone() },
 				SetAppendix(Xcm(alloc::vec![
 					RefundSurplus,

@@ -16,11 +16,12 @@
 
 #[cfg(not(feature = "runtime-benchmarks"))]
 use crate::XcmRouter;
+use crate::BridgeRelayers;
 use crate::{
 	xcm_config,
 	xcm_config::{TreasuryAccount, UniversalLocation},
 	Balances, EthereumInboundQueue, EthereumOutboundQueue, EthereumSystem, MessageQueue, Runtime,
-	RuntimeEvent, TransactionByteFee, EthereumRewards
+	RuntimeEvent, TransactionByteFee,
 };
 use parachains_common::{AccountId, Balance};
 use snowbridge_beacon_primitives::{Fork, ForkVersions};
@@ -35,6 +36,7 @@ use testnet_parachains_constants::westend::{
 	fee::WeightToFee,
 	snowbridge::{EthereumLocation, EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX},
 };
+use sp_runtime::traits::ConstU8;
 
 use crate::xcm_config::RelayNetwork;
 #[cfg(feature = "runtime-benchmarks")]
@@ -42,7 +44,7 @@ use benchmark_helpers::DoNothingRouter;
 use frame_support::{parameter_types, weights::ConstantMultiplier};
 use pallet_xcm::EnsureXcm;
 use sp_runtime::{
-	traits::{ConstU32, ConstU8, Keccak256},
+	traits::{ConstU32, Keccak256},
 	FixedU128,
 };
 use xcm::prelude::{GlobalConsensus, InteriorLocation, Location, Parachain};
@@ -123,7 +125,7 @@ impl snowbridge_pallet_inbound_queue_v2::Config for Runtime {
 	type GatewayAddress = EthereumGatewayAddress;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Runtime;
-	type RewardLedger = EthereumRewards;
+	type RewardLedger = BridgeRelayers;
 	type Token = Balances;
 	type WeightInfo = crate::weights::snowbridge_pallet_inbound_queue_v2::WeightInfo<Runtime>;
 }
@@ -154,10 +156,9 @@ impl snowbridge_pallet_outbound_queue_v2::Config for Runtime {
 	type WeightToFee = WeightToFee;
 	type Verifier = snowbridge_pallet_ethereum_client::Pallet<Runtime>;
 	type GatewayAddress = EthereumGatewayAddress;
-	type RewardLedger = EthereumRewards;
+	type RewardLedger = BridgeRelayers;
 	type Token = Balances;
 	type WeightInfo = crate::weights::snowbridge_pallet_outbound_queue_v2::WeightInfo<Runtime>;
-	type RewardLedger = ();
 }
 
 #[cfg(any(feature = "std", feature = "fast-runtime", feature = "runtime-benchmarks", test))]
@@ -233,26 +234,6 @@ impl snowbridge_pallet_system::Config for Runtime {
 	type InboundDeliveryCost = EthereumInboundQueue;
 	type UniversalLocation = UniversalLocation;
 	type EthereumLocation = EthereumLocation;
-}
-
-parameter_types! {
-	pub WethAddress: H160 = H160(hex_literal::hex!("fff9976782d46cc05630d1f6ebab18b2324d6b14"));
-}
-
-pub const ASSET_HUB_ID: u32 = westend_runtime_constants::system_parachain::ASSET_HUB_ID;
-
-impl snowbridge_pallet_rewards::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type AssetHubParaId = ConstU32<ASSET_HUB_ID>;
-	type EthereumNetwork = EthereumNetwork;
-	type WethAddress = WethAddress;
-	#[cfg(not(feature = "runtime-benchmarks"))]
-	type XcmSender = XcmRouter;
-	#[cfg(feature = "runtime-benchmarks")]
-	type XcmSender = DoNothingRouter;
-	type WeightInfo = (); // TODO generate weights
-	type Token = Balances;
-	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
