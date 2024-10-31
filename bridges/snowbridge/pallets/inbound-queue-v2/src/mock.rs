@@ -13,7 +13,7 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use sp_core::{ConstU128, H160, ConstU8};
+use sp_core::{ConstU128, ConstU8, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
 	BuildStorage, MultiSignature,

@@ -22,15 +22,12 @@
 //! GRANDPA tracking pallet only needs to be aware of one chain.
 
 use super::{weights, AccountId, Balance, Balances, BlockNumber, Runtime, RuntimeEvent};
+use crate::{xcm_config, XcmRouter};
 use bp_messages::LegacyLaneId;
 use frame_support::parameter_types;
 use sp_core::H160;
+use sp_runtime::traits::{ConstU128, ConstU32, ConstU8};
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
-use crate::XcmRouter;
-use crate::xcm_config;
-use sp_runtime::traits::ConstU32;
-use sp_runtime::traits::ConstU128;
-use sp_runtime::traits::ConstU8;
 
 parameter_types! {
 	pub storage RequiredStakeForStakeAndSlash: Balance = 1_000_000;

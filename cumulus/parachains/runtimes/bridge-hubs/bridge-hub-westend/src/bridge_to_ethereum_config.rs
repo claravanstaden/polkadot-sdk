@@ -16,12 +16,11 @@
 
 #[cfg(not(feature = "runtime-benchmarks"))]
 use crate::XcmRouter;
-use crate::BridgeRelayers;
 use crate::{
 	xcm_config,
 	xcm_config::{TreasuryAccount, UniversalLocation},
-	Balances, EthereumInboundQueue, EthereumOutboundQueue, EthereumSystem, MessageQueue, Runtime,
-	RuntimeEvent, TransactionByteFee,
+	Balances, BridgeRelayers, EthereumInboundQueue, EthereumOutboundQueue, EthereumSystem,
+	MessageQueue, Runtime, RuntimeEvent, TransactionByteFee,
 };
 use parachains_common::{AccountId, Balance};
 use snowbridge_beacon_primitives::{Fork, ForkVersions};
@@ -31,12 +30,12 @@ use snowbridge_router_primitives::{
 	outbound::{v1::EthereumBlobExporter, v2::EthereumBlobExporter as EthereumBlobExporterV2},
 };
 use sp_core::H160;
+use sp_runtime::traits::ConstU8;
 use testnet_parachains_constants::westend::{
 	currency::*,
 	fee::WeightToFee,
 	snowbridge::{EthereumLocation, EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX},
 };
-use sp_runtime::traits::ConstU8;
 
 use crate::xcm_config::RelayNetwork;
 #[cfg(feature = "runtime-benchmarks")]

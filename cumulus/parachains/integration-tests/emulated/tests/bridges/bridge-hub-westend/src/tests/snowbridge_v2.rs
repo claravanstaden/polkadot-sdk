@@ -16,8 +16,8 @@ use crate::imports::*;
 use bridge_hub_westend_runtime::EthereumInboundQueue;
 use hex_literal::hex;
 use snowbridge_core::rewards::RewardLedger;
-use snowbridge_router_primitives::inbound::{
-	v1::{Command, Destination, MessageV1, VersionedMessage},
+use snowbridge_router_primitives::inbound::v1::{
+	Command, Destination, MessageV1, VersionedMessage,
 };
 use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
 
@@ -202,11 +202,12 @@ fn claim_rewards_works() {
 			]
 		);
 
-		let relayer_location = Location::new(1, [Parachain(1000), Junction::AccountId32{ id: reward_address.into(), network: None}]);
-		let result = BridgeRelayers::claim(
-			RuntimeOrigin::signed(relayer.clone()),
-			relayer_location.clone(),
+		let relayer_location = Location::new(
+			1,
+			[Parachain(1000), Junction::AccountId32 { id: reward_address.into(), network: None }],
 		);
+		let result =
+			BridgeRelayers::claim(RuntimeOrigin::signed(relayer.clone()), relayer_location.clone());
 		assert_ok!(result);
 
 		let events = BridgeHubWestend::events();
