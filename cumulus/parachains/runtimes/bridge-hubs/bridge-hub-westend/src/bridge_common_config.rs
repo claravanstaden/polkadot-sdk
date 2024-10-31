@@ -27,7 +27,7 @@ use bp_messages::LegacyLaneId;
 use frame_support::parameter_types;
 use sp_core::H160;
 use sp_runtime::traits::{ConstU128, ConstU32, ConstU8};
-use testnet_parachains_constants::westend::snowbridge::EthereumNetwork;
+use testnet_parachains_constants::westend::snowbridge::{EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX};
 
 parameter_types! {
 	pub storage RequiredStakeForStakeAndSlash: Balance = 1_000_000;
@@ -73,6 +73,6 @@ impl pallet_bridge_relayers::Config<RelayersForLegacyLaneIdsMessagesInstance> fo
 	type XcmSender = DoNothingRouter;
 	type Token = Balances;
 	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
-	type InboundQueuePalletInstance = ConstU8<80>;
+	type InboundQueuePalletInstance = ConstU8<INBOUND_QUEUE_PALLET_INDEX>;
 	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
 }

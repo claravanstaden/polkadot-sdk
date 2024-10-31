@@ -466,8 +466,9 @@ pub mod pallet {
 			RewardsMapping::<T, I>::remove(account_id.clone());
 
 			let dest = Location::new(1, [Parachain(T::AssetHubParaId::get().into())]);
-			let (_xcm_hash, _) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
+			let (_xcm_hash, xcm_delivery_fee) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
 
+			// TODO charge delivery fee
 			Self::deposit_event(Event::RewardClaimed {
 				account_id,
 				deposit_location,

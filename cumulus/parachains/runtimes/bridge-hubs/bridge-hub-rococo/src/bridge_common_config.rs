@@ -24,7 +24,7 @@
 use super::{weights, AccountId, Balance, Balances, BlockNumber, Runtime, RuntimeEvent};
 use bp_parachains::SingleParaStoredHeaderDataBuilder;
 use frame_support::{parameter_types, traits::ConstU32};
-use testnet_parachains_constants::rococo::snowbridge::EthereumNetwork;
+use testnet_parachains_constants::rococo::snowbridge::{EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX};
 use sp_core::H160;
 use crate::xcm_config;
 use crate::XcmRouter;
@@ -98,7 +98,7 @@ impl pallet_bridge_relayers::Config<RelayersForLegacyLaneIdsMessagesInstance> fo
 	type XcmSender = DoNothingRouter;
 	type Token = Balances;
 	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
-	type InboundQueuePalletInstance = ConstU8<80>;
+	type InboundQueuePalletInstance = ConstU8<INBOUND_QUEUE_PALLET_INDEX>;
 	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
 }
 
@@ -131,7 +131,7 @@ impl pallet_bridge_relayers::Config<RelayersForPermissionlessLanesInstance> for 
 	type XcmSender = DoNothingRouter;
 	type Token = Balances;
 	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
-	type InboundQueuePalletInstance = ConstU8<80>;
+	type InboundQueuePalletInstance = ConstU8<INBOUND_QUEUE_PALLET_INDEX>;
 	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
 }
 
