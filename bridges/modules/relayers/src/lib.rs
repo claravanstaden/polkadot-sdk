@@ -30,18 +30,21 @@ use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_runtime::{traits::CheckedSub, Saturating};
 use sp_std::marker::PhantomData;
 
-pub use pallet::*;
-pub use payment_adapter::DeliveryConfirmationPaymentsAdapter;
-pub use stake_adapter::StakeAndSlashNamed;
-pub use weights::WeightInfo;
-pub use weights_ext::WeightInfoExt;
 use frame_support::{
-	traits::fungible::{Inspect, Mutate},
+	traits::{
+		fungible::{Inspect, Mutate},
+		tokens::Preservation,
+	},
 	PalletError,
 };
 use frame_system::pallet_prelude::*;
+pub use pallet::*;
+pub use payment_adapter::DeliveryConfirmationPaymentsAdapter;
 use snowbridge_core::rewards::RewardLedger;
 use sp_core::H160;
+pub use stake_adapter::StakeAndSlashNamed;
+pub use weights::WeightInfo;
+pub use weights_ext::WeightInfoExt;
 use xcm::prelude::{send_xcm, SendError as XcmpSendError, *};
 use xcm_executor::traits::TransactAsset;
 
@@ -62,7 +65,7 @@ pub const LOG_TARGET: &str = "runtime::bridge-relayers";
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type BalanceOf<T, I = ()> =
-<<T as Config<I>>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config<I>>::Token as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -109,6 +112,9 @@ pub mod pallet {
 		type AssetTransactor: TransactAsset;
 		type AssetHubXCMFee: Get<u128>;
 		type Token: Mutate<Self::AccountId> + Inspect<Self::AccountId>;
+		/// TreasuryAccount to collect fees
+		#[pallet::constant]
+		type TreasuryAccount: Get<Self::AccountId>;
 	}
 
 	#[pallet::pallet]
@@ -256,13 +262,14 @@ pub mod pallet {
 			)
 		}
 
-		/// Claim accumulated rewards.
+		/// Claim accumulated relayer rewards. Balance is minted on AH.
+		/// Fees:
+		/// BH execution fee - paid in DOT when executing the claim extrinsic
+		/// XCM delivery fee to AH - paid in DOT to Treasury on BH
+		/// AH execution fee - paid in Weth, deducated from relayer accumulated rewards
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::WeightInfo::claim(), DispatchClass::Operational))]
-		pub fn claim(
-			origin: OriginFor<T>,
-			deposit_location: Location,
-		) -> DispatchResult {
+		pub fn claim(origin: OriginFor<T>, deposit_location: Location) -> DispatchResult {
 			let account_id = ensure_signed(origin)?;
 			Self::process_claim(account_id, deposit_location)?;
 			Ok(())
@@ -431,10 +438,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn process_claim(
-			account_id: AccountIdOf<T>,
-			deposit_location: Location,
-		) -> DispatchResult {
+		/// Claim rewards on AH, based on accumulated rewards balance in storage.
+		fn process_claim(account_id: AccountIdOf<T>, deposit_location: Location) -> DispatchResult {
 			let value = RewardsMapping::<T, I>::get(account_id.clone());
 			if value.is_zero() {
 				return Err(Error::<T, I>::InsufficientFunds.into());
@@ -454,26 +459,45 @@ pub mod pallet {
 				UniversalOrigin(GlobalConsensus(T::EthereumNetwork::get())),
 				ReserveAssetDeposited(reward_asset.clone().into()),
 				BuyExecution { fees: fee_asset, weight_limit: Unlimited },
-				DepositAsset { assets: AllCounted(1).into(), beneficiary: deposit_location.clone() },
+				DepositAsset {
+					assets: AllCounted(1).into(),
+					beneficiary: deposit_location.clone()
+				},
 				SetAppendix(Xcm(alloc::vec![
 					RefundSurplus,
-					DepositAsset { assets: AllCounted(1).into(), beneficiary: deposit_location.clone() },
+					DepositAsset {
+						assets: AllCounted(1).into(),
+						beneficiary: deposit_location.clone()
+					},
 				])),
 			]
-				.into();
+			.into();
 
 			// Remove the reward since it has been claimed.
 			RewardsMapping::<T, I>::remove(account_id.clone());
 
 			let dest = Location::new(1, [Parachain(T::AssetHubParaId::get().into())]);
-			let (_xcm_hash, xcm_delivery_fee) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
+			let (_xcm_hash, xcm_delivery_fee) =
+				send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T, I>::from)?;
 
-			// TODO charge delivery fee
-			Self::deposit_event(Event::RewardClaimed {
-				account_id,
-				deposit_location,
-				value,
-			});
+			match xcm_delivery_fee.get(0) {
+				Some(fee_asset) =>
+					if let Fungible(amount) = fee_asset.fun {
+						let xcm_delivery_fee_balance: BalanceOf<T, I> =
+							TryInto::<BalanceOf<T, I>>::try_into(amount)
+								.map_err(|_| Error::<T, I>::InvalidAmount)?;
+						let treasury_account = T::TreasuryAccount::get();
+						T::Token::transfer(
+							&account_id,
+							&treasury_account,
+							xcm_delivery_fee_balance,
+							Preservation::Preserve,
+						)?;
+					},
+				None => (),
+			};
+
+			Self::deposit_event(Event::RewardClaimed { account_id, deposit_location, value });
 			Ok(())
 		}
 	}
@@ -619,7 +643,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type RewardsMapping<T: Config<I>, I: 'static = ()> =
-	StorageMap<_, Identity, AccountIdOf<T>, BalanceOf<T, I>, ValueQuery>;
+		StorageMap<_, Identity, AccountIdOf<T>, BalanceOf<T, I>, ValueQuery>;
 
 	impl<T: Config<I>, I: 'static> RewardLedger<AccountIdOf<T>, BalanceOf<T, I>> for Pallet<T, I> {
 		fn deposit(account_id: AccountIdOf<T>, value: BalanceOf<T, I>) -> DispatchResult {
@@ -636,19 +660,18 @@ pub mod pallet {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::H256;
 	use bp_messages::LaneIdType;
 	use mock::{RuntimeEvent as TestEvent, *};
+	use sp_core::H256;
 
 	use crate::Event::{RewardPaid, RewardRegistered};
 	use bp_relayers::RewardsAccountOwner;
 	use frame_support::{
-		assert_noop, assert_ok,
+		assert_err, assert_noop, assert_ok,
 		traits::fungible::{Inspect, Mutate},
 	};
 	use frame_system::{EventRecord, Pallet as System, Phase};
 	use sp_runtime::DispatchError;
-	use frame_support::assert_err;
 
 	fn get_ready_for_events() {
 		System::<TestRuntime>::set_block_number(1);
@@ -1121,7 +1144,11 @@ mod tests {
 	fn test_claim() {
 		run_test(|| {
 			let relayer: u64 = 1;
-			let interior: InteriorLocation = [Parachain(1000), Junction::AccountId32{network: None, id: H256::random().into()}].into();
+			let interior: InteriorLocation = [
+				Parachain(1000),
+				Junction::AccountId32 { network: None, id: H256::random().into() },
+			]
+			.into();
 			let claim_location = Location::new(1, interior);
 
 			let result = Pallet::<TestRuntime>::claim(
@@ -1136,13 +1163,10 @@ mod tests {
 			assert_ok!(result2);
 
 			// Claim rewards
-			let result3 = Pallet::<TestRuntime>::claim(
-				RuntimeOrigin::signed(relayer),
-				claim_location,
-			);
+			let result3 =
+				Pallet::<TestRuntime>::claim(RuntimeOrigin::signed(relayer), claim_location);
 			assert_ok!(result3);
 			assert_eq!(<RewardsMapping<TestRuntime>>::get(relayer), 0);
 		});
 	}
-
 }

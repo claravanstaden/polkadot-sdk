@@ -18,6 +18,7 @@
 
 use crate as pallet_bridge_relayers;
 
+use crate::XcmpSendError;
 use bp_header_chain::ChainWithGrandpa;
 use bp_messages::{
 	target_chain::{DispatchMessage, MessageDispatch},
@@ -34,19 +35,15 @@ use frame_support::{
 	traits::fungible::Mutate,
 	weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight},
 };
+use hex_literal::hex;
 use pallet_transaction_payment::Multiplier;
-use sp_core::{ConstU64, ConstU8, H256};
+use sp_core::{ConstU64, ConstU8, H160, H256};
 use sp_runtime::{
-	traits::{BlakeTwo256, ConstU32},
+	traits::{BlakeTwo256, ConstU128, ConstU32},
 	BuildStorage, FixedPointNumber, Perquintill, StateVersion,
 };
-use sp_core::H160;
 use xcm::{latest::SendXcm, prelude::*};
-use crate::XcmpSendError;
-use hex_literal::hex;
-use xcm_executor::AssetsInHolding;
-use xcm_executor::traits::TransactAsset;
-use sp_runtime::traits::ConstU128;
+use xcm_executor::{traits::TransactAsset, AssetsInHolding};
 
 /// Account identifier at `ThisChain`.
 pub type ThisChainAccountId = u64;
@@ -305,6 +302,7 @@ impl pallet_bridge_relayers::Config for TestRuntime {
 
 	type AssetTransactor = SuccessfulTransactor;
 	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
+	type InboundQueuePalletInstance = ConstU8<80>;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -449,7 +447,6 @@ impl TransactAsset for SuccessfulTransactor {
 		Ok(AssetsInHolding::default())
 	}
 }
-
 
 /// Reward account params that we are using in tests.
 pub fn test_reward_account_param() -> RewardsAccountParams<TestLaneIdType> {

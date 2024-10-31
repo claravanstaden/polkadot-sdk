@@ -4,7 +4,7 @@ use super::*;
 
 use bp_messages::{HashedLaneId, LaneIdType};
 use bp_relayers::{PayRewardFromAccount, PaymentProcedure, RewardsAccountParams};
-use frame_support::{derive_impl, parameter_types, traits::ConstU32};
+use frame_support::{derive_impl, parameter_types, traits::ConstU32, PalletId};
 use hex_literal::hex;
 use snowbridge_beacon_primitives::{
 	types::deneb, BeaconHeader, ExecutionProof, Fork, ForkVersions, VersionedExecutionPayloadHeader,
@@ -15,7 +15,7 @@ use snowbridge_core::{
 };
 use sp_core::{ConstU128, ConstU8, H160};
 use sp_runtime::{
-	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
+	traits::{AccountIdConversion, IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
 	BuildStorage, MultiSignature,
 };
 use sp_std::{convert::From, default::Default};
@@ -177,6 +177,7 @@ impl inbound_queue::Config for Test {
 
 parameter_types! {
 	pub WethAddress: H160 = hex!("774667629726ec1FaBEbCEc0D9139bD1C8f72a23").into();
+	pub TreasuryAccount: AccountId = PalletId(*b"py/trsry").into_account_truncating();
 }
 
 pub type TestLaneIdType = HashedLaneId;
@@ -216,7 +217,8 @@ impl pallet_bridge_relayers::Config for Test {
 	type WethAddress = WethAddress;
 	type XcmSender = MockXcmSender;
 	type AssetTransactor = SuccessfulTransactor;
-	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
+	type AssetHubXCMFee = ConstU128<15u128>;
+	type TreasuryAccount = TreasuryAccount;
 }
 
 pub fn last_events(n: usize) -> Vec<RuntimeEvent> {

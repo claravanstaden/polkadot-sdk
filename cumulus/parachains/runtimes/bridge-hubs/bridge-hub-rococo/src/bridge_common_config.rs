@@ -22,14 +22,14 @@
 //! GRANDPA tracking pallet only needs to be aware of one chain.
 
 use super::{weights, AccountId, Balance, Balances, BlockNumber, Runtime, RuntimeEvent};
+use crate::{xcm_config, TreasuryAccount, XcmRouter};
 use bp_parachains::SingleParaStoredHeaderDataBuilder;
 use frame_support::{parameter_types, traits::ConstU32};
-use testnet_parachains_constants::rococo::snowbridge::{EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX};
 use sp_core::H160;
-use crate::xcm_config;
-use crate::XcmRouter;
-use sp_runtime::traits::ConstU128;
-use sp_runtime::traits::ConstU8;
+use sp_runtime::traits::{ConstU128, ConstU8};
+use testnet_parachains_constants::rococo::snowbridge::{
+	EthereumNetwork, INBOUND_QUEUE_PALLET_INDEX,
+};
 
 parameter_types! {
 	pub const RelayChainHeadersToKeep: u32 = 1024;
@@ -99,7 +99,8 @@ impl pallet_bridge_relayers::Config<RelayersForLegacyLaneIdsMessagesInstance> fo
 	type Token = Balances;
 	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
 	type InboundQueuePalletInstance = ConstU8<INBOUND_QUEUE_PALLET_INDEX>;
-	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
+	type AssetHubXCMFee = ConstU128<15>;
+	type TreasuryAccount = TreasuryAccount;
 }
 
 /// Allows collect and claim rewards for relayers
@@ -132,7 +133,8 @@ impl pallet_bridge_relayers::Config<RelayersForPermissionlessLanesInstance> for 
 	type Token = Balances;
 	type AssetTransactor = <xcm_config::XcmConfig as xcm_executor::Config>::AssetTransactor;
 	type InboundQueuePalletInstance = ConstU8<INBOUND_QUEUE_PALLET_INDEX>;
-	type AssetHubXCMFee = ConstU128<1_000_000_000_000>;
+	type AssetHubXCMFee = ConstU128<15>;
+	type TreasuryAccount = TreasuryAccount;
 }
 
 parameter_types! {
@@ -140,7 +142,6 @@ parameter_types! {
 }
 
 pub const ASSET_HUB_ID: u32 = rococo_runtime_constants::system_parachain::ASSET_HUB_ID;
-
 
 /// Add GRANDPA bridge pallet to track Rococo Bulletin chain.
 pub type BridgeGrandpaRococoBulletinInstance = pallet_bridge_grandpa::Instance4;

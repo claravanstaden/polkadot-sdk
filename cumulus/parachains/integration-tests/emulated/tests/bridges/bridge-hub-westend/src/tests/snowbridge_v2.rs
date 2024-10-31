@@ -167,7 +167,12 @@ fn claim_rewards_works() {
 	let weth_asset_location: Location =
 		(Parent, Parent, EthereumNetwork::get(), AccountKey20 { network: None, key: weth }).into();
 
-	BridgeHubWestend::fund_accounts(vec![(assethub_sovereign.clone(), INITIAL_FUND)]);
+	let relayer = BridgeHubWestendSender::get();
+
+	BridgeHubWestend::fund_accounts(vec![
+		(assethub_sovereign.clone(), INITIAL_FUND),
+		(relayer.clone(), INITIAL_FUND),
+	]);
 
 	AssetHubWestend::execute_with(|| {
 		type RuntimeOrigin = <AssetHubWestend as Chain>::RuntimeOrigin;
@@ -189,7 +194,6 @@ fn claim_rewards_works() {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		type RuntimeOrigin = <BridgeHubWestend as Chain>::RuntimeOrigin;
 
-		let relayer = BridgeHubWestendSender::get();
 		let reward_address = AssetHubWestendReceiver::get();
 		type BridgeRelayers = <BridgeHubWestend as BridgeHubWestendPallet>::BridgeRelayers;
 		assert_ok!(BridgeRelayers::deposit(relayer.clone().into(), 2 * ETH));

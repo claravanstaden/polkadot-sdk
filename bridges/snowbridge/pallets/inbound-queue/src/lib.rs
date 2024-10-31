@@ -291,7 +291,8 @@ pub mod pallet {
 			);
 
 			// Burning fees for teleport
-			burn_fees::<T::AssetTransactor, BalanceOf<T>>(channel.para_id, fee)?;
+			let parachain_location = Location::new(1, [Parachain(channel.para_id.into())]);
+			burn_fees::<T::AssetTransactor, BalanceOf<T>>(parachain_location, fee)?;
 
 			// Attempt to send XCM to a dest parachain
 			let message_id = Self::send_xcm(xcm, channel.para_id)?;

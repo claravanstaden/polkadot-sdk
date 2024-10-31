@@ -12,6 +12,7 @@ use frame_support::{
 use bp_messages::HashedLaneId;
 use bp_relayers::{PayRewardFromAccount, PaymentProcedure, RewardsAccountParams};
 use codec::Encode;
+use frame_support::PalletId;
 use hex_literal::hex;
 use snowbridge_core::{
 	gwei,
@@ -23,7 +24,7 @@ use snowbridge_core::{
 };
 use sp_core::{ConstU128, ConstU32, ConstU8, H160, H256};
 use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup, Keccak256},
+	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, Keccak256},
 	AccountId32, BuildStorage, FixedU128,
 };
 use sp_std::marker::PhantomData;
@@ -137,6 +138,7 @@ impl crate::Config for Test {
 
 parameter_types! {
 	pub WethAddress: H160 = hex!("774667629726ec1FaBEbCEc0D9139bD1C8f72a23").into();
+	pub TreasuryAccount: AccountId = PalletId(*b"py/trsry").into_account_truncating();
 }
 
 pub type TestLaneIdType = HashedLaneId;
@@ -181,7 +183,8 @@ impl pallet_bridge_relayers::Config for Test {
 	type XcmSender = MockXcmSender;
 
 	type AssetTransactor = SuccessfulTransactor;
-	type AssetHubXCMFee = ConstU128<1_000_000_000_000u128>;
+	type AssetHubXCMFee = ConstU128<15u128>;
+	type TreasuryAccount = TreasuryAccount;
 }
 
 // Mock XCM sender that always succeeds
