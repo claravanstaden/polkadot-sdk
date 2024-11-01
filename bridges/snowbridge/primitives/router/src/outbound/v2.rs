@@ -133,15 +133,12 @@ where
 		})?;
 
 		// validate the message
-		let (ticket, fee) = OutboundQueue::validate(&message).map_err(|err| {
+		let (ticket, _) = OutboundQueue::validate(&message).map_err(|err| {
 			log::error!(target: TARGET, "OutboundQueue validation of message failed. {err:?}");
 			SendError::Unroutable
 		})?;
 
-		// convert fee to Asset
-		let fee = Asset::from((Location::parent(), fee.total())).into();
-
-		Ok(((ticket.encode(), XcmHash::from(message.id)), fee))
+		Ok(((ticket.encode(), XcmHash::from(message.id)), Assets::default()))
 	}
 
 	fn deliver(blob: (Vec<u8>, XcmHash)) -> Result<XcmHash, SendError> {
