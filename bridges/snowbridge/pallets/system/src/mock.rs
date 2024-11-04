@@ -12,13 +12,7 @@ use xcm_executor::traits::ConvertLocation;
 
 use snowbridge_core::{
 	gwei, meth,
-	outbound::{
-		v1::ConstantGasMeter,
-		v2::{
-			DefaultOutboundQueue, Fee as FeeV2, Message as MessageV2, SendMessage as SendMessageV2,
-		},
-		SendError, SendMessageFeeProvider,
-	},
+	outbound::{v1::ConstantGasMeter, v2::DefaultOutboundQueue},
 	sibling_sovereign_account, AgentId, AllowSiblingsOnly, ParaId, PricingParameters, Rewards,
 };
 use sp_runtime::{

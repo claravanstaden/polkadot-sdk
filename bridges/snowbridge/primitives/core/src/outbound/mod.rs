@@ -44,5 +44,6 @@ pub enum SendError {
 
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, Debug, TypeInfo)]
 pub enum DryRunError {
-	ConvertFailed,
+	ConvertLocationFailed,
+	ConvertXcmFailed,
 }

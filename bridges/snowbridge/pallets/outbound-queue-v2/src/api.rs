@@ -14,7 +14,7 @@ use snowbridge_core::{
 use snowbridge_merkle_tree::{merkle_proof, MerkleProof};
 use snowbridge_router_primitives::outbound::v2::XcmConverter;
 use sp_core::Get;
-use sp_std::vec::Vec;
+use sp_std::{default::Default, vec::Vec};
 use xcm::{
 	latest::Location,
 	prelude::{Parachain, Xcm},
@@ -41,10 +41,10 @@ where
 		&xcm,
 		T::EthereumNetwork::get(),
 		AgentIdOf::convert_location(&Location::new(1, Parachain(1000)))
-			.ok_or(DryRunError::ConvertFailed)?,
+			.ok_or(DryRunError::ConvertLocationFailed)?,
 	);
 
-	let message: Message = converter.convert().map_err(|_| DryRunError::ConvertFailed)?;
+	let message: Message = converter.convert().map_err(|_| DryRunError::ConvertXcmFailed)?;
 
 	let fee = Fee::from(crate::Pallet::<T>::calculate_local_fee());
 
@@ -58,8 +58,11 @@ where
 		})
 		.collect();
 
-	let committed_message =
-		InboundMessage { origin: message.origin.0.to_vec(), nonce: 0, commands };
+	let committed_message = InboundMessage {
+		origin: message.origin,
+		nonce: Default::default(),
+		commands: commands.try_into().map_err(|_| DryRunError::ConvertXcmFailed)?,
+	};
 
 	Ok((committed_message, fee))
 }

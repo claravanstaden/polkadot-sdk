@@ -114,7 +114,7 @@ use frame_support::{
 };
 use snowbridge_core::{
 	inbound::Message as DeliveryMessage,
-	outbound::v2::{CommandWrapper, Fee, GasMeter, InboundMessage, Message},
+	outbound::v2::{CommandWrapper, Fee, GasMeter, InboundMessage, InboundMessageWrapper, Message},
 	BasicOperatingMode, RewardLedger, TokenId,
 };
 use snowbridge_merkle_tree::merkle_root;
@@ -131,19 +131,23 @@ pub use pallet::*;
 
 use alloy_sol_types::SolValue;
 
+use alloy_primitives::FixedBytes;
+
 use sp_runtime::traits::TrailingZeroInput;
 
 use sp_runtime::traits::MaybeEquivalence;
 
 use xcm::prelude::{Location, NetworkId};
 
+use snowbridge_core::inbound::{VerificationError, Verifier};
+
+use sp_core::H160;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use snowbridge_core::inbound::{VerificationError, Verifier};
-	use sp_core::H160;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -389,14 +393,23 @@ pub mod pallet {
 				.collect();
 
 			// Construct the final committed message
-			let committed_message =
-				InboundMessage { origin: message.origin.0.to_vec(), nonce, commands };
+			let inbound_message = InboundMessage {
+				origin: message.origin,
+				nonce,
+				commands: commands.clone().try_into().map_err(|_| Corrupt)?,
+			};
+
+			let committed_message = InboundMessageWrapper {
+				origin: FixedBytes::from(message.origin.as_fixed_bytes()),
+				nonce,
+				commands,
+			};
 
 			// ABI-encode and hash the prepared message
 			let message_abi_encoded = committed_message.abi_encode();
 			let message_abi_encoded_hash = <T as Config>::Hashing::hash(&message_abi_encoded);
 
-			Messages::<T>::append(Box::new(committed_message.clone()));
+			Messages::<T>::append(Box::new(inbound_message));
 			MessageLeaves::<T>::append(message_abi_encoded_hash);
 
 			<PendingOrders<T>>::try_mutate(nonce, |maybe_locked| -> DispatchResult {

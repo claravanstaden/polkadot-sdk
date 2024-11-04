@@ -1,3 +1,4 @@
+use alloy_primitives::FixedBytes;
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
 use crate::{mock::*, *};
@@ -12,7 +13,7 @@ use frame_support::{
 use codec::Encode;
 use snowbridge_core::{
 	outbound::{
-		v2::{primary_governance_origin, Command, SendMessage},
+		v2::{primary_governance_origin, Command, InboundMessageWrapper, SendMessage},
 		SendError,
 	},
 	ChannelId, ParaId,
@@ -261,10 +262,12 @@ fn encode_mock_message() {
 		})
 		.collect();
 
-	// Todo: print the abi-encoded message and try to decode with solidity test
-	let committed_message =
-		InboundMessage { origin: message.origin.0.to_vec(), nonce: 1, commands };
+	// print the abi-encoded message and decode with solidity test
+	let committed_message = InboundMessageWrapper {
+		origin: FixedBytes::from(message.origin.as_fixed_bytes()),
+		nonce: 1,
+		commands,
+	};
 	let message_abi_encoded = committed_message.abi_encode();
-	// print_hex(message_abi_encoded.as_slice());
 	println!("{}", HexDisplay::from(&message_abi_encoded));
 }

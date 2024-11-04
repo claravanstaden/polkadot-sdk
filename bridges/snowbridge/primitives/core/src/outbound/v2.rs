@@ -16,19 +16,16 @@ use alloy_primitives::{Address, FixedBytes};
 use alloy_sol_types::SolValue;
 
 sol! {
-	#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
-	#[cfg_attr(feature = "std", derive(PartialEq))]
-	struct InboundMessage {
+	struct InboundMessageWrapper {
 		// origin
-		bytes origin;
+		bytes32 origin;
 		// Message nonce
 		uint64 nonce;
 		// Commands
 		CommandWrapper[] commands;
 	}
 
-	#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
-	#[cfg_attr(feature = "std", derive(PartialEq))]
+	#[derive(Encode, Decode, RuntimeDebug, PartialEq,TypeInfo)]
 	struct CommandWrapper {
 		uint8 kind;
 		uint64 gas;
@@ -88,6 +85,16 @@ sol! {
 		// Amount to mint
 		uint128 amount;
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo, PartialEq, Clone, RuntimeDebug)]
+pub struct InboundMessage {
+	/// Origin
+	pub origin: H256,
+	/// Nonce
+	pub nonce: u64,
+	/// Commands
+	pub commands: BoundedVec<CommandWrapper, ConstU32<MAX_COMMANDS>>,
 }
 
 pub const MAX_COMMANDS: u32 = 8;
