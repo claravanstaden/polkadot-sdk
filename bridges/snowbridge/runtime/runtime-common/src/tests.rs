@@ -1,8 +1,8 @@
 use crate::XcmExportFeeToSibling;
 use frame_support::{parameter_types, sp_runtime::testing::H256};
 use snowbridge_core::outbound::{
-	v1::{Fee, Message, SendError, SendMessage},
-	SendMessageFeeProvider,
+	v1::{Fee, Message, SendMessage},
+	SendError, SendMessageFeeProvider,
 };
 use xcm::prelude::{
 	Asset, Assets, Here, Kusama, Location, NetworkId, Parachain, XcmContext, XcmError, XcmHash,

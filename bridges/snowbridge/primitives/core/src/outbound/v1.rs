@@ -3,13 +3,12 @@
 //! # Outbound V1 primitives
 
 use crate::{
-	outbound::{OperatingMode, SendMessageFeeProvider},
+	outbound::{OperatingMode, SendError, SendMessageFeeProvider},
 	pricing::UD60x18,
 	ChannelId,
 };
 use codec::{Decode, Encode};
 use ethabi::Token;
-use frame_support::PalletError;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
 use sp_core::{RuntimeDebug, H160, H256, U256};
@@ -363,17 +362,6 @@ pub trait SendMessage: SendMessageFeeProvider {
 
 pub trait Ticket: Encode + Decode + Clone {
 	fn message_id(&self) -> H256;
-}
-
-/// Reasons why sending to Ethereum could not be initiated
-#[derive(Copy, Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, PalletError, TypeInfo)]
-pub enum SendError {
-	/// Message is too large to be safely executed on Ethereum
-	MessageTooLarge,
-	/// The bridge has been halted for maintenance
-	Halted,
-	/// Invalid Channel
-	InvalidChannel,
 }
 
 pub trait GasMeter {

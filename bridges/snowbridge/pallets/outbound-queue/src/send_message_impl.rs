@@ -12,8 +12,8 @@ use frame_support::{
 use frame_system::unique;
 use snowbridge_core::{
 	outbound::{
-		v1::{Fee, Message, QueuedMessage, SendError, SendMessage, VersionedQueuedMessage},
-		SendMessageFeeProvider,
+		v1::{Fee, Message, QueuedMessage, SendMessage, VersionedQueuedMessage},
+		SendError, SendMessageFeeProvider,
 	},
 	ChannelId, PRIMARY_GOVERNANCE_CHANNEL,
 };

@@ -19,8 +19,8 @@ use crate::XcmRouter;
 use crate::{
 	xcm_config,
 	xcm_config::{TreasuryAccount, UniversalLocation},
-	Balances, EthereumInboundQueue, EthereumOutboundQueue, EthereumSystem, MessageQueue, Runtime,
-	RuntimeEvent, TransactionByteFee,
+	Balances, EthereumInboundQueue, EthereumOutboundQueue, EthereumOutboundQueueV2, EthereumSystem,
+	MessageQueue, Runtime, RuntimeEvent, TransactionByteFee,
 };
 use parachains_common::{AccountId, Balance};
 use snowbridge_beacon_primitives::{Fork, ForkVersions};
@@ -248,6 +248,7 @@ impl snowbridge_pallet_system::Config for Runtime {
 	type InboundDeliveryCost = EthereumInboundQueue;
 	type UniversalLocation = UniversalLocation;
 	type EthereumLocation = EthereumLocation;
+	type OutboundQueueV2 = EthereumOutboundQueueV2;
 }
 
 #[cfg(feature = "runtime-benchmarks")]

@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
 //! # Outbound V2 primitives
 
-use crate::outbound::{OperatingMode, SendMessageFeeProvider};
+use crate::outbound::{OperatingMode, SendError, SendMessageFeeProvider};
 use alloy_sol_types::sol;
 use codec::{Decode, Encode};
-use frame_support::{pallet_prelude::ConstU32, BoundedVec, PalletError};
+use frame_support::{pallet_prelude::ConstU32, BoundedVec};
 use hex_literal::hex;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
@@ -266,15 +266,25 @@ pub trait SendMessage: SendMessageFeeProvider {
 	fn deliver(ticket: Self::Ticket) -> Result<H256, SendError>;
 }
 
-/// Reasons why sending to Ethereum could not be initiated
-#[derive(Copy, Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, PalletError, TypeInfo)]
-pub enum SendError {
-	/// Message is too large to be safely executed on Ethereum
-	MessageTooLarge,
-	/// The bridge has been halted for maintenance
-	Halted,
-	/// Invalid Channel
-	InvalidChannel,
+pub struct DefaultOutboundQueue;
+impl SendMessage for DefaultOutboundQueue {
+	type Ticket = ();
+
+	fn validate(_: &Message) -> Result<(Self::Ticket, Fee<Self::Balance>), SendError> {
+		Ok(((), Fee { local: Default::default() }))
+	}
+
+	fn deliver(_: Self::Ticket) -> Result<H256, SendError> {
+		Ok(H256::zero())
+	}
+}
+
+impl SendMessageFeeProvider for DefaultOutboundQueue {
+	type Balance = u128;
+
+	fn local_fee() -> Self::Balance {
+		Default::default()
+	}
 }
 
 pub trait GasMeter {
