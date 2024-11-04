@@ -17,7 +17,7 @@ use snowbridge_core::{
 	},
 	ChannelId, ParaId,
 };
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 
 #[test]
 fn submit_messages_and_commit() {
@@ -246,4 +246,25 @@ fn encode_digest_item() {
 			]
 		);
 	});
+}
+
+#[test]
+fn encode_mock_message() {
+	let message: Message = mock_message(1000);
+	let commands: Vec<CommandWrapper> = message
+		.commands
+		.into_iter()
+		.map(|command| CommandWrapper {
+			kind: command.index(),
+			gas: <Test as Config>::GasMeter::maximum_dispatch_gas_used_at_most(&command),
+			payload: command.abi_encode(),
+		})
+		.collect();
+
+	// Todo: print the abi-encoded message and try to decode with solidity test
+	let committed_message =
+		InboundMessage { origin: message.origin.0.to_vec(), nonce: 1, commands };
+	let message_abi_encoded = committed_message.abi_encode();
+	// print_hex(message_abi_encoded.as_slice());
+	println!("{}", HexDisplay::from(&message_abi_encoded));
 }
