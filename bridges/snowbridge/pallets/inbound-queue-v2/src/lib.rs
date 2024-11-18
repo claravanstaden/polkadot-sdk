@@ -41,11 +41,9 @@ use envelope::Envelope;
 use frame_support::PalletError;
 use frame_system::ensure_signed;
 use scale_info::TypeInfo;
-use snowbridge_core::inbound::Proof;
 use sp_core::H160;
 use sp_std::vec;
 use xcm::{
-	latest::Xcm,
 	prelude::{send_xcm, Junction::*, Location, SendError as XcmpSendError, SendXcm},
 };
 
@@ -54,7 +52,7 @@ use snowbridge_core::{
 	BasicOperatingMode,
 };
 use snowbridge_router_primitives::inbound::v2::{ConvertMessage, Message as MessageV2};
-
+use snowbridge_router_primitives::inbound::dry_run::DryRunMessage;
 pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -90,10 +88,10 @@ pub mod pallet {
 
 		/// XCM message sender
 		type XcmSender: SendXcm;
+		type XCMDryRunner: DryRunMessage;
 		/// Address of the Gateway contract
 		#[pallet::constant]
 		type GatewayAddress: Get<H160>;
-
 		type WeightInfo: WeightInfo;
 		/// AssetHub parachain ID
 		type AssetHubParaId: Get<u32>;
@@ -245,21 +243,6 @@ pub mod pallet {
 			OperatingMode::<T>::set(mode);
 			Self::deposit_event(Event::OperatingModeChanged { mode });
 			Ok(())
-		}
-	}
-
-	impl<T: Config> Pallet<T> {
-		pub fn dry_run_message(
-			message: Message,
-			proof: Proof,
-		) -> Result<(Xcm<()>, u128), Error<T>> {
-			let xcm =
-				T::MessageConverter::convert(message).map_err(|e| Error::<T>::ConvertMessage(e))?;
-			let origin_location = Location::new(1, Parachain(1002).into());
-			let dry_run_result =
-				pallet_xcm::dry_run_xcm(origin_location, xcm).map_err(Error::<T>::from)?;
-
-			Ok((xcm, 0))
 		}
 	}
 }

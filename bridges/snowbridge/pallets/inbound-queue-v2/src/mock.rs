@@ -3,7 +3,7 @@
 use super::*;
 
 use crate::{self as inbound_queue};
-use frame_support::{derive_impl, parameter_types, traits::ConstU32, weights::IdentityFee};
+use frame_support::{derive_impl, parameter_types, traits::ConstU32};
 use hex_literal::hex;
 use snowbridge_beacon_primitives::{
 	types::deneb, BeaconHeader, ExecutionProof, Fork, ForkVersions, VersionedExecutionPayloadHeader,
@@ -13,13 +13,15 @@ use snowbridge_core::{
 	TokenId,
 };
 use snowbridge_router_primitives::inbound::v2::MessageToXcm;
-use sp_core::{H160, H256};
+use sp_core::H160;
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
-	BuildStorage, FixedU128, MultiSignature,
+	BuildStorage, MultiSignature,
 };
 use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
+use snowbridge_router_primitives::inbound::dry_run::DryRunError;
+use snowbridge_router_primitives::inbound::v2::Message;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -132,6 +134,15 @@ impl SendXcm for MockXcmSender {
 	}
 }
 
+pub struct MockXcmDryRunner;
+
+impl DryRunMessage for MockXcmDryRunner {
+
+	fn dry_run_xcm(_message: Message) -> Result<Xcm<()>, DryRunError> {
+		Ok(Xcm::<()>::new())
+	}
+}
+
 pub const DOT: u128 = 10_000_000_000;
 
 pub struct MockTokenIdConvert;
@@ -155,6 +166,7 @@ impl inbound_queue::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Verifier = MockVerifier;
 	type XcmSender = MockXcmSender;
+	type XCMDryRunner = MockXcmDryRunner;
 	type WeightInfo = ();
 	type GatewayAddress = GatewayAddress;
 	type AssetHubParaId = ConstU32<1000>;

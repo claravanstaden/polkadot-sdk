@@ -4,20 +4,20 @@ use super::*;
 
 use frame_support::{assert_noop, assert_ok};
 use hex_literal::hex;
-use snowbridge_core::{inbound::Proof, ChannelId};
+use snowbridge_core::inbound::Proof;
 use sp_keyring::AccountKeyring as Keyring;
 use sp_runtime::DispatchError;
 
 use crate::{mock::*, Error, Event as InboundQueueEvent};
 use codec::DecodeLimit;
-use snowbridge_router_primitives::inbound::v2::{ConvertMessage, InboundAsset};
+use snowbridge_router_primitives::inbound::v2::InboundAsset;
 use sp_core::H256;
 use xcm::{
 	opaque::latest::{
 		prelude::{ClearOrigin, ReceiveTeleportedAsset},
-		Asset, AssetId, Assets,
+		Asset
 	},
-	prelude::{Junction::AccountKey20, *},
+	prelude::*,
 	VersionedXcm, MAX_XCM_DECODE_DEPTH,
 };
 
@@ -207,7 +207,6 @@ fn test_send_foreign_erc20_token_payload() {
 	});
 }
 
-use xcm::opaque::latest::Junctions::Here;
 #[test]
 fn test_register_token_inbound_message_with_xcm_and_claimer() {
 	new_tester().execute_with(|| {
@@ -264,7 +263,7 @@ fn encode_xcm() {
 	new_tester().execute_with(|| {
 		let total_fee_asset: Asset = (Location::parent(), 1_000_000_000).into();
 
-		let mut instructions: Xcm<()> =
+		let instructions: Xcm<()> =
 			vec![ReceiveTeleportedAsset(total_fee_asset.into()), ClearOrigin].into();
 
 		let versioned_xcm_message = VersionedXcm::V5(instructions.clone());

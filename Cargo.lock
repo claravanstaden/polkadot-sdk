@@ -21342,7 +21342,6 @@ dependencies = [
  "hex-literal",
  "log",
  "pallet-balances",
- "pallet-xcm",
  "parity-scale-codec",
  "scale-info",
  "serde",

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
+extern crate alloc;
+
 use crate::inbound::v2::{ConvertMessage, Message};
 use codec::{Decode, Encode};
 use frame_support::{
@@ -13,7 +15,7 @@ use sp_runtime::{
 };
 use xcm::{
 	latest::Xcm,
-	opaque::latest::{ExecuteXcm, Junction, Junction::Parachain, Location},
+	opaque::latest::{ExecuteXcm, Junction::Parachain, Location},
 };
 use xcm_builder::InspectMessageQueues;
 
@@ -57,30 +59,30 @@ where
 {
 	fn dry_run_xcm(message: Message) -> Result<Xcm<()>, DryRunError> {
 		let message_xcm =
-			MessageConverter::convert(message).map_err(|error| DryRunError::InvalidPayload)?;
+			MessageConverter::convert(message).map_err(|_| DryRunError::InvalidPayload)?;
 		let origin_location = Location::new(1, Parachain(1002));
 
 		let xcm_program = Xcm::<RuntimeCall>::from(message_xcm.clone().try_into().unwrap());
 
 		let origin_location: Location = origin_location
 			.try_into()
-			.map_err(|error| DryRunError::VersionedConversionFailed)?;
+			.map_err(|_| DryRunError::VersionedConversionFailed)?;
 		let xcm: Xcm<RuntimeCall> =
-			xcm_program.try_into().map_err(|error| DryRunError::VersionedConversionFailed)?;
+			xcm_program.try_into().map_err(|_| DryRunError::VersionedConversionFailed)?;
 		let mut hash = xcm.using_encoded(sp_io::hashing::blake2_256);
 		frame_system::Pallet::<Runtime>::reset_events(); // To make sure we only record events from current call.
-		let result = XcmExecutor::prepare_and_execute(
+		let _result = XcmExecutor::prepare_and_execute(
 			origin_location,
 			xcm,
 			&mut hash,
 			Weight::MAX, // Max limit available for execution.
 			Weight::zero(),
 		);
-		let forwarded_xcms = Router::get_messages();
-		let events: Vec<<Runtime as frame_system::Config>::RuntimeEvent> =
+		let _forwarded_xcms = Router::get_messages();
+		let _events: alloc::vec::Vec<<Runtime as frame_system::Config>::RuntimeEvent> =
 			frame_system::Pallet::<Runtime>::read_events_no_consensus()
 				.map(|record| record.event.clone())
 				.collect();
-		Ok(vec![].into())
+		Ok(alloc::vec![].into())
 	}
 }
