@@ -49,10 +49,7 @@ use snowbridge_core::{
 	inbound::{Message, VerificationError, Verifier},
 	BasicOperatingMode,
 };
-use snowbridge_router_primitives::inbound::{
-	dry_run::DryRunMessage,
-	v2::{ConvertMessage, Message as MessageV2},
-};
+use snowbridge_router_primitives::inbound::v2::{ConvertMessage, Message as MessageV2};
 pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -88,7 +85,6 @@ pub mod pallet {
 
 		/// XCM message sender
 		type XcmSender: SendXcm;
-		type XCMDryRunner: DryRunMessage;
 		/// Address of the Gateway contract
 		#[pallet::constant]
 		type GatewayAddress: Get<H160>;

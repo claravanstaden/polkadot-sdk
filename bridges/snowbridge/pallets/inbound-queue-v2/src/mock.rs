@@ -135,14 +135,6 @@ impl SendXcm for MockXcmSender {
 	}
 }
 
-pub struct MockXcmDryRunner;
-
-impl DryRunMessage for MockXcmDryRunner {
-	fn dry_run_xcm(_message: Message) -> Result<Xcm<()>, DryRunError> {
-		Ok(Xcm::<()>::new())
-	}
-}
-
 pub const DOT: u128 = 10_000_000_000;
 
 pub struct MockTokenIdConvert;
@@ -166,7 +158,6 @@ impl inbound_queue::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Verifier = MockVerifier;
 	type XcmSender = MockXcmSender;
-	type XCMDryRunner = MockXcmDryRunner;
 	type WeightInfo = ();
 	type GatewayAddress = GatewayAddress;
 	type AssetHubParaId = ConstU32<1000>;

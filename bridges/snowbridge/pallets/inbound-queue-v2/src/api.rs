@@ -4,12 +4,13 @@
 
 use crate::{Config, Error};
 use snowbridge_core::inbound::Proof;
-use snowbridge_router_primitives::inbound::{dry_run::DryRunMessage, v2::Message};
+use snowbridge_router_primitives::inbound::v2::{ConvertMessage, Message};
 use xcm::latest::Xcm;
-pub fn dry_run<T>(message: Message, _proof: Proof) -> Result<(Xcm<()>, u128), Error<T>>
+
+pub fn dry_run<T>(message: Message, _proof: Proof) -> Result<Xcm<()>, Error<T>>
 where
 	T: Config,
 {
-	let _dry_run_result = T::XCMDryRunner::dry_run_xcm(message);
-	Ok((Xcm::<()>::new(), 0))
+	let xcm = T::MessageConverter::convert(message).map_err(|e| Error::<T>::ConvertMessage(e))?;
+	Ok(xcm)
 }

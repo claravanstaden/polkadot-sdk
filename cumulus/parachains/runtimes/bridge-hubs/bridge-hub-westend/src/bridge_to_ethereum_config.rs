@@ -26,7 +26,6 @@ use parachains_common::{AccountId, Balance};
 use snowbridge_beacon_primitives::{Fork, ForkVersions};
 use snowbridge_core::{gwei, meth, AllowSiblingsOnly, PricingParameters, Rewards};
 use snowbridge_router_primitives::{
-	inbound::v1::MessageToXcm,
 	outbound::{v1::EthereumBlobExporter, v2::EthereumBlobExporter as EthereumBlobExporterV2},
 };
 use sp_core::H160;
@@ -95,7 +94,7 @@ impl snowbridge_pallet_inbound_queue::Config for Runtime {
 	type GatewayAddress = EthereumGatewayAddress;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Runtime;
-	type MessageConverter = MessageToXcm<
+	type MessageConverter = snowbridge_router_primitives::inbound::v1::MessageToXcm<
 		CreateAssetCall,
 		CreateAssetDeposit,
 		ConstU8<INBOUND_QUEUE_PALLET_INDEX>,
@@ -124,6 +123,8 @@ impl snowbridge_pallet_inbound_queue_v2::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Runtime;
 	type WeightInfo = crate::weights::snowbridge_pallet_inbound_queue_v2::WeightInfo<Runtime>;
+	type AssetHubParaId = ConstU32<1000>;
+	type MessageConverter = snowbridge_router_primitives::inbound::v2::MessageToXcm<EthereumNetwork, ConstU8<INBOUND_QUEUE_PALLET_INDEX>>;
 }
 
 impl snowbridge_pallet_outbound_queue::Config for Runtime {
