@@ -124,7 +124,7 @@ impl snowbridge_pallet_inbound_queue_v2::Config for Runtime {
 	type Helper = Runtime;
 	type WeightInfo = crate::weights::snowbridge_pallet_inbound_queue_v2::WeightInfo<Runtime>;
 	type AssetHubParaId = ConstU32<1000>;
-	type MessageConverter = snowbridge_router_primitives::inbound::v2::MessageToXcm<EthereumNetwork, ConstU8<INBOUND_QUEUE_PALLET_INDEX>>;
+	type MessageConverter = snowbridge_router_primitives::inbound::v2::MessageToXcm<EthereumNetwork, ConstU8<INBOUND_QUEUE_PALLET_INDEX>, EthereumSystem>;
 }
 
 impl snowbridge_pallet_outbound_queue::Config for Runtime {

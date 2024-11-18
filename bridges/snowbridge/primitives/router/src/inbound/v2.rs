@@ -6,7 +6,9 @@ use codec::{Decode, DecodeLimit, Encode};
 use core::marker::PhantomData;
 use frame_support::PalletError;
 use scale_info::TypeInfo;
+use snowbridge_core::TokenId;
 use sp_core::{Get, RuntimeDebug, H160, H256};
+use sp_runtime::traits::MaybeEquivalence;
 use sp_std::prelude::*;
 use xcm::{
 	prelude::{Junction::AccountKey20, *},
@@ -62,25 +64,29 @@ pub enum ConvertMessageError {
 	InvalidVersionedXCM,
 	/// Invalid claimer MultiAddress provided in payload.
 	InvalidClaimer,
+	/// Invalid foreign ERC20 token ID
+	InvalidAsset,
 }
 
 pub trait ConvertMessage {
 	fn convert(message: Message) -> Result<Xcm<()>, ConvertMessageError>;
 }
 
-pub struct MessageToXcm<EthereumNetwork, InboundQueuePalletInstance>
+pub struct MessageToXcm<EthereumNetwork, InboundQueuePalletInstance, ConvertAssetId>
 where
 	EthereumNetwork: Get<NetworkId>,
 	InboundQueuePalletInstance: Get<u8>,
+	ConvertAssetId: MaybeEquivalence<TokenId, Location>,
 {
-	_phantom: PhantomData<(EthereumNetwork, InboundQueuePalletInstance)>,
+	_phantom: PhantomData<(EthereumNetwork, InboundQueuePalletInstance, ConvertAssetId)>,
 }
 
-impl<EthereumNetwork, InboundQueuePalletInstance> ConvertMessage
-	for MessageToXcm<EthereumNetwork, InboundQueuePalletInstance>
+impl<EthereumNetwork, InboundQueuePalletInstance, ConvertAssetId> ConvertMessage
+	for MessageToXcm<EthereumNetwork, InboundQueuePalletInstance, ConvertAssetId>
 where
 	EthereumNetwork: Get<NetworkId>,
 	InboundQueuePalletInstance: Get<u8>,
+	ConvertAssetId: MaybeEquivalence<TokenId, Location>,
 {
 	fn convert(message: Message) -> Result<Xcm<()>, ConvertMessageError> {
 		let mut message_xcm: Xcm<()> = Xcm::new();
@@ -105,8 +111,7 @@ where
 		let network = EthereumNetwork::get();
 
 		let fee_asset = Location::new(1, Here);
-		let fee_value = 1_000_000_000u128; // TODO needs to be dry-run to get the fee but also
-									 // need to add a fee here for the dry run... Chicken/egg problem?
+		let fee_value = 1_000_000_000u128; // TODO get from command
 		let fee: Asset = (fee_asset, fee_value).into();
 		let mut instructions = vec![
 			ReceiveTeleportedAsset(fee.clone().into()),
@@ -128,12 +133,9 @@ where
 					instructions.push(ReserveAssetDeposited((token_location, *value).into()));
 				},
 				InboundAsset::ForeignTokenERC20 { token_id, value } => {
-					// TODO check how token is represented as H256 on AH, assets pallet?
-					let token_location: Location =
-						Location::new(0, [AccountId32 { network: None, id: (*token_id).into() }]);
-					// TODO Is this token always on AH? Would probably need to distinguish between
-					// tokens on other parachains eventually
-					instructions.push(WithdrawAsset((token_location, *value).into()));
+					let asset_id = ConvertAssetId::convert(&token_id)
+						.ok_or(ConvertMessageError::InvalidAsset)?;
+					instructions.push(WithdrawAsset((asset_id, *value).into()));
 				},
 			}
 		}

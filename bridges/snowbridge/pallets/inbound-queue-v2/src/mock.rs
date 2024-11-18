@@ -12,10 +12,7 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use snowbridge_router_primitives::inbound::{
-	dry_run::DryRunError,
-	v2::{Message, MessageToXcm},
-};
+use snowbridge_router_primitives::inbound::v2::MessageToXcm;
 use sp_core::H160;
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
@@ -135,8 +132,6 @@ impl SendXcm for MockXcmSender {
 	}
 }
 
-pub const DOT: u128 = 10_000_000_000;
-
 pub struct MockTokenIdConvert;
 impl MaybeEquivalence<TokenId, Location> for MockTokenIdConvert {
 	fn convert(_id: &TokenId) -> Option<Location> {
@@ -161,7 +156,8 @@ impl inbound_queue::Config for Test {
 	type WeightInfo = ();
 	type GatewayAddress = GatewayAddress;
 	type AssetHubParaId = ConstU32<1000>;
-	type MessageConverter = MessageToXcm<EthereumNetwork, InboundQueuePalletInstance>;
+	type MessageConverter =
+		MessageToXcm<EthereumNetwork, InboundQueuePalletInstance, MockTokenIdConvert>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = Test;
 }
@@ -266,6 +262,3 @@ pub fn mock_execution_proof() -> ExecutionProof {
 		execution_branch: vec![],
 	}
 }
-
-pub const ASSET_HUB_PARAID: u32 = 1000u32;
-pub const TEMPLATE_PARAID: u32 = 1001u32;
