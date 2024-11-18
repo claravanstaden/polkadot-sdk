@@ -43,16 +43,16 @@ use frame_system::ensure_signed;
 use scale_info::TypeInfo;
 use sp_core::H160;
 use sp_std::vec;
-use xcm::{
-	prelude::{send_xcm, Junction::*, Location, SendError as XcmpSendError, SendXcm},
-};
+use xcm::prelude::{send_xcm, Junction::*, Location, SendError as XcmpSendError, SendXcm};
 
 use snowbridge_core::{
 	inbound::{Message, VerificationError, Verifier},
 	BasicOperatingMode,
 };
-use snowbridge_router_primitives::inbound::v2::{ConvertMessage, Message as MessageV2};
-use snowbridge_router_primitives::inbound::dry_run::DryRunMessage;
+use snowbridge_router_primitives::inbound::{
+	dry_run::DryRunMessage,
+	v2::{ConvertMessage, Message as MessageV2},
+};
 pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]

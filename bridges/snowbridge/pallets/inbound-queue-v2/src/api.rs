@@ -4,11 +4,8 @@
 
 use crate::{Config, Error};
 use snowbridge_core::inbound::Proof;
-use snowbridge_router_primitives::inbound::v2::Message;
-use xcm::{
-	latest::Xcm,
-};
-use snowbridge_router_primitives::inbound::dry_run::DryRunMessage;
+use snowbridge_router_primitives::inbound::{dry_run::DryRunMessage, v2::Message};
+use xcm::latest::Xcm;
 pub fn dry_run<T>(message: Message, _proof: Proof) -> Result<(Xcm<()>, u128), Error<T>>
 where
 	T: Config,

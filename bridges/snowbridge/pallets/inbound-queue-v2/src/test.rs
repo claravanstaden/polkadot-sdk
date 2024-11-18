@@ -15,7 +15,7 @@ use sp_core::H256;
 use xcm::{
 	opaque::latest::{
 		prelude::{ClearOrigin, ReceiveTeleportedAsset},
-		Asset
+		Asset,
 	},
 	prelude::*,
 	VersionedXcm, MAX_XCM_DECODE_DEPTH,

@@ -12,7 +12,10 @@ use snowbridge_core::{
 	inbound::{Log, Proof, VerificationError},
 	TokenId,
 };
-use snowbridge_router_primitives::inbound::v2::MessageToXcm;
+use snowbridge_router_primitives::inbound::{
+	dry_run::DryRunError,
+	v2::{Message, MessageToXcm},
+};
 use sp_core::H160;
 use sp_runtime::{
 	traits::{IdentifyAccount, IdentityLookup, MaybeEquivalence, Verify},
@@ -20,8 +23,6 @@ use sp_runtime::{
 };
 use sp_std::{convert::From, default::Default};
 use xcm::{latest::SendXcm, prelude::*};
-use snowbridge_router_primitives::inbound::dry_run::DryRunError;
-use snowbridge_router_primitives::inbound::v2::Message;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -137,7 +138,6 @@ impl SendXcm for MockXcmSender {
 pub struct MockXcmDryRunner;
 
 impl DryRunMessage for MockXcmDryRunner {
-
 	fn dry_run_xcm(_message: Message) -> Result<Xcm<()>, DryRunError> {
 		Ok(Xcm::<()>::new())
 	}
