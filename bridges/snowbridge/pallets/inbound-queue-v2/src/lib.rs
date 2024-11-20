@@ -196,7 +196,7 @@ pub mod pallet {
 			ensure!(T::GatewayAddress::get() == envelope.gateway, Error::<T>::InvalidGateway);
 
 			// Verify the message has not been processed
-			ensure!(!<Nonce<T>>::contains_key(envelope.nonce), Error::<T>::InvalidNonce);
+			ensure!(!Nonce::<T>::contains_key(envelope.nonce), Error::<T>::InvalidNonce);
 
 			// Decode payload into `MessageV2`
 			let message = MessageV2::decode_all(&mut envelope.payload.as_ref())
@@ -220,10 +220,7 @@ pub mod pallet {
 			Self::deposit_event(Event::MessageReceived { nonce: envelope.nonce, message_id });
 
 			// Set nonce flag to true
-			<Nonce<T>>::try_mutate(envelope.nonce, |done| -> DispatchResult {
-				*done = true;
-				Ok(())
-			})?;
+			Nonce::<T>::insert(envelope.nonce, ())
 
 			Ok(())
 		}

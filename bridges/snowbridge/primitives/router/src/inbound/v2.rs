@@ -25,7 +25,7 @@ pub enum VersionedMessage {
 	V2(Message),
 }
 
-/// For V2, the ethereum side sends messages which are transcoded into XCM. These messages are
+/// The ethereum side sends messages which are transcoded into XCM on BH. These messages are
 /// self-contained, in that they can be transcoded using only information in the message.
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Message {
