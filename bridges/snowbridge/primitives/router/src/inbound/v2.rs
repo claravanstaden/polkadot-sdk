@@ -32,7 +32,7 @@ pub struct Message {
 	/// The origin address
 	pub origin: H160,
 	/// The assets
-	pub assets: Vec<InboundAsset>,
+	pub assets: Vec<Asset>,
 	// The command originating from the Gateway contract
 	pub xcm: Vec<u8>,
 	// The claimer in the case that funds get trapped.
@@ -40,7 +40,7 @@ pub struct Message {
 }
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub enum InboundAsset {
+pub enum Asset {
 	NativeTokenERC20 {
 		/// The native token ID
 		token_id: H160,
@@ -112,7 +112,7 @@ where
 
 		let fee_asset = Location::new(1, Here);
 		let fee_value = 1_000_000_000u128; // TODO get from command
-		let fee: Asset = (fee_asset, fee_value).into();
+		let fee: xcm::prelude::Asset = (fee_asset, fee_value).into();
 		let mut instructions = vec![
 			ReceiveTeleportedAsset(fee.clone().into()),
 			BuyExecution { fees: fee, weight_limit: Unlimited },
@@ -122,7 +122,7 @@ where
 
 		for asset in &message.assets {
 			match asset {
-				InboundAsset::NativeTokenERC20 { token_id, value } => {
+				Asset::NativeTokenERC20 { token_id, value } => {
 					let token_location: Location = Location::new(
 						2,
 						[
@@ -132,7 +132,7 @@ where
 					);
 					instructions.push(ReserveAssetDeposited((token_location, *value).into()));
 				},
-				InboundAsset::ForeignTokenERC20 { token_id, value } => {
+				Asset::ForeignTokenERC20 { token_id, value } => {
 					let asset_id = ConvertAssetId::convert(&token_id)
 						.ok_or(ConvertMessageError::InvalidAsset)?;
 					instructions.push(WithdrawAsset((asset_id, *value).into()));
