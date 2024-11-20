@@ -220,10 +220,7 @@ pub mod pallet {
 			Self::deposit_event(Event::MessageReceived { nonce: envelope.nonce, message_id });
 
 			// Set nonce flag to true
-			<Nonce<T>>::try_mutate(envelope.nonce, |done| -> DispatchResult {
-				*done = true;
-				Ok(())
-			})?;
+			Nonce::<T>::insert(envelope.nonce, ())
 
 			Ok(())
 		}
