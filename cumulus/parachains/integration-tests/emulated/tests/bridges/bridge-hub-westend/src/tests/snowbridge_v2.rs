@@ -214,5 +214,15 @@ fn xcm_always_with_weth_as_fee() {
 		);
 	});
 
-	AssetHubWestend::execute_with(|| {});
+	AssetHubWestend::execute_with(|| {
+		type RuntimeEvent = <AssetHubWestend as Chain>::RuntimeEvent;
+		assert_expected_events!(
+			AssetHubWestend,
+			vec![RuntimeEvent::MessageQueue(pallet_message_queue::Event::Processed { .. }) => {},]
+		);
+		assert_expected_events!(
+			AssetHubWestend,
+			vec![RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { .. }) => {},]
+		);
+	});
 }
