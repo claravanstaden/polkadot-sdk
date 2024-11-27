@@ -39,7 +39,6 @@ mod mock;
 #[cfg(test)]
 mod test;
 
-use alloc::boxed::Box;
 use codec::{Decode, DecodeAll, Encode};
 use envelope::Envelope;
 use frame_support::{
@@ -51,10 +50,9 @@ use scale_info::TypeInfo;
 use sp_core::H160;
 use sp_std::vec;
 use types::Nonce;
-use xcm::prelude::{Junction::*, Location, *};
+use xcm::prelude::{Junction::*, Location, SendError as XcmpSendError, *};
 
 use snowbridge_core::{
-	fees::burn_fees,
 	inbound::{Message, VerificationError, Verifier},
 	sparse_bitmap::SparseBitmap,
 	BasicOperatingMode,
@@ -63,8 +61,6 @@ use snowbridge_router_primitives::inbound::v2::{
 	ConvertMessage, ConvertMessageError, Message as MessageV2,
 };
 pub use weights::WeightInfo;
-use xcm::{VersionedLocation, VersionedXcm};
-use xcm_builder::SendController;
 use xcm_executor::traits::TransactAsset;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -97,7 +93,7 @@ pub mod pallet {
 		/// The verifier for inbound messages from Ethereum.
 		type Verifier: Verifier;
 		/// XCM message sender.
-		type XcmSender: SendController<<Self as frame_system::Config>::RuntimeOrigin>;
+		type XcmSender: SendXcm;
 		/// Address of the Gateway contract.
 		#[pallet::constant]
 		type GatewayAddress: Get<H160>;
@@ -174,6 +170,22 @@ pub mod pallet {
 		Fees,
 	}
 
+	impl<T: Config> From<XcmpSendError> for Error<T> {
+		fn from(e: XcmpSendError) -> Self {
+			match e {
+				XcmpSendError::NotApplicable => Error::<T>::Send(SendError::NotApplicable),
+				XcmpSendError::Unroutable => Error::<T>::Send(SendError::NotRoutable),
+				XcmpSendError::Transport(_) => Error::<T>::Send(SendError::Transport),
+				XcmpSendError::DestinationUnsupported =>
+					Error::<T>::Send(SendError::DestinationUnsupported),
+				XcmpSendError::ExceedsMaxMessageSize =>
+					Error::<T>::Send(SendError::ExceedsMaxMessageSize),
+				XcmpSendError::MissingArgument => Error::<T>::Send(SendError::MissingArgument),
+				XcmpSendError::Fees => Error::<T>::Send(SendError::Fees),
+			}
+		}
+	}
+
 	/// The nonce of the message been processed or not
 	#[pallet::storage]
 	pub type NonceBitmap<T: Config> = StorageMap<_, Twox64Concat, u128, u128, ValueQuery>;
@@ -213,12 +225,6 @@ pub mod pallet {
 			let origin_account_location = Self::account_to_location(who)?;
 
 			let xcm = Self::do_convert(message, origin_account_location.clone())?;
-
-			// Burn the required fees for the static XCM message part
-			burn_fees::<T::AssetTransactor, BalanceOf<T>>(
-				origin_account_location,
-				T::XcmPrologueFee::get(),
-			)?;
 
 			// Todo: Deposit fee(in Ether) to RewardLeger which should cover all of:
 			// T::RewardLeger::deposit(who, envelope.fee.into())?;
@@ -261,14 +267,13 @@ pub mod pallet {
 		}
 
 		pub fn send_xcm(
-			origin: OriginFor<T>,
+			_origin: OriginFor<T>,
 			xcm: Xcm<()>,
 			dest_para_id: u32,
 		) -> Result<XcmHash, DispatchError> {
-			let versioned_dest =
-				Box::new(VersionedLocation::V5(Location::new(1, [Parachain(dest_para_id)])));
-			let versioned_xcm = Box::new(VersionedXcm::V5(xcm));
-			Ok(T::XcmSender::send(origin, versioned_dest, versioned_xcm)?)
+			let dest = Location::new(1, [Parachain(dest_para_id)]);
+			let (xcm_hash, _) = send_xcm::<T::XcmSender>(dest, xcm).map_err(Error::<T>::from)?;
+			Ok(xcm_hash)
 		}
 
 		pub fn do_convert(

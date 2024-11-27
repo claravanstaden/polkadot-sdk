@@ -11,7 +11,7 @@ use sp_core::{Get, RuntimeDebug, H160, H256};
 use sp_runtime::traits::MaybeEquivalence;
 use sp_std::prelude::*;
 use xcm::{
-	prelude::{Junction::AccountKey20, *},
+	prelude::{Asset as XcmAsset, Junction::AccountKey20, *},
 	MAX_XCM_DECODE_DEPTH,
 };
 
@@ -117,13 +117,27 @@ where
 
 		let network = EthereumNetwork::get();
 
-		let fee_asset = Location::new(1, Here);
-		let fee: xcm::prelude::Asset = (fee_asset.clone(), XcmPrologueFee::get()).into();
+		// Fee asset is always in WETH
+		// amount from envelop, maybe 1/3 for local and 2/3 for the remote
+		let fee: XcmAsset = (
+			Location::new(
+				2,
+				[
+					GlobalConsensus(EthereumNetwork::get()),
+					// WETH
+					AccountKey20 { network: None, key: [1; 20] },
+				],
+			),
+			// 2/3 of the total fee from
+			2 * 10000 / 3,
+		)
+			.into();
+
 		let mut instructions = vec![
-			ReceiveTeleportedAsset(fee.clone().into()),
-			PayFees { asset: fee },
 			DescendOrigin(PalletInstance(InboundQueuePalletInstance::get()).into()),
 			UniversalOrigin(GlobalConsensus(network)),
+			ReserveAssetDeposited(fee.clone().into()),
+			PayFees { asset: fee.clone() },
 		];
 
 		for asset in &message.assets {
@@ -163,11 +177,7 @@ where
 		let appendix = vec![
 			RefundSurplus,
 			// Refund excess fees to the relayer
-			// TODO maybe refund all fees to the relayer instead of just DOT?
-			DepositAsset {
-				assets: Wild(AllOf { id: AssetId(fee_asset.into()), fun: WildFungible }),
-				beneficiary: origin_account_location,
-			},
+			DepositAsset { assets: Wild(All), beneficiary: origin_account_location },
 		];
 
 		instructions.extend(appendix);

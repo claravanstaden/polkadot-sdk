@@ -73,8 +73,8 @@ parameter_types! {
 	pub EthereumUniversalLocation: InteriorLocation = [GlobalConsensus(EthereumNetwork::get())].into();
 }
 
-/// The XCM execution fee on AH for the static part of the XCM message (not the user provided parts).
-/// Calculated with integration test snowbridge_v2::xcm_prologue_fee
+/// The XCM execution fee on AH for the static part of the XCM message (not the user provided
+/// parts). Calculated with integration test snowbridge_v2::xcm_prologue_fee
 const XCM_PROLOGUE_FEE: u128 = 67_652_000_000;
 
 impl snowbridge_pallet_inbound_queue::Config for Runtime {
@@ -111,7 +111,7 @@ impl snowbridge_pallet_inbound_queue_v2::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Verifier = snowbridge_pallet_ethereum_client::Pallet<Runtime>;
 	#[cfg(not(feature = "runtime-benchmarks"))]
-	type XcmSender = PolkadotXcm;
+	type XcmSender = XcmRouter;
 	#[cfg(feature = "runtime-benchmarks")]
 	type XcmSender = DoNothingRouter;
 	type GatewayAddress = EthereumGatewayAddress;
