@@ -680,8 +680,5 @@ pub mod electra {
 		pub withdrawals_root: H256,
 		pub blob_gas_used: u64,
 		pub excess_blob_gas: u64,
-		pub deposit_requests_root: H256,       // [New in Electra:EIP6110]
-		pub withdrawal_requests_root: H256,    // [New in Electra:EIP7002:EIP7251]
-		pub consolidation_requests_root: H256, // [New in Electra:EIP7251]
 	}
 }

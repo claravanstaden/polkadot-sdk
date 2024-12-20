@@ -311,9 +311,6 @@ pub mod electra {
 		pub withdrawals_root: [u8; 32],
 		pub blob_gas_used: u64,
 		pub excess_blob_gas: u64,
-		pub deposit_requests_root: [u8; 32],
-		pub withdrawal_requests_root: [u8; 32],
-		pub consolidation_requests_root: [u8; 32],
 	}
 
 	impl TryFrom<ExecutionPayloadHeader> for SSZExecutionPayloadHeader {
@@ -353,9 +350,6 @@ pub mod electra {
 				withdrawals_root: payload.withdrawals_root.to_fixed_bytes(),
 				blob_gas_used: payload.blob_gas_used,
 				excess_blob_gas: payload.excess_blob_gas,
-				deposit_requests_root: payload.deposit_requests_root.to_fixed_bytes(),
-				withdrawal_requests_root: payload.withdrawal_requests_root.to_fixed_bytes(),
-				consolidation_requests_root: payload.consolidation_requests_root.to_fixed_bytes(),
 			})
 		}
 	}
