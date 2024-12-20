@@ -151,28 +151,28 @@ parameter_types! {
 parameter_types! {
 	pub const ChainForkVersions: ForkVersions = ForkVersions {
 		genesis: Fork {
-			version: [144, 0, 0, 111], // 0x90000069
+			version: [16, 99, 118, 36], // 0x10637624
 			epoch: 0,
 		},
 		altair: Fork {
-			version: [144, 0, 0, 112], // 0x90000070
-			epoch: 50,
+			version: [32,99,118,36], // 0x20637624
+			epoch: 0,
 		},
 		bellatrix: Fork {
-			version: [144, 0, 0, 113], // 0x90000071
-			epoch: 100,
+			version: [48,99,118,36], // 0x30637624
+			epoch: 0,
 		},
 		capella: Fork {
-			version: [144, 0, 0, 114], // 0x90000072
-			epoch: 56832,
+			version: [64,99,118,36], // 0x40637624
+			epoch: 0,
 		},
 		deneb: Fork {
-			version: [144, 0, 0, 115], // 0x90000073
-			epoch: 132608,
+			version: [80,99,118,36], // 0x50637624
+			epoch: 0,
 		},
 		electra: Fork {
-			version: [5, 0, 0, 0], // 0x05000000
-			epoch: 80000000000,
+			version: [96,99,118,36], // 0x60637624
+			epoch: 256,
 		}
 	};
 }
