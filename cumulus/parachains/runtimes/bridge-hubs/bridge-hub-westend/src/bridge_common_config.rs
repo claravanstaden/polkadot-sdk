@@ -27,7 +27,17 @@ use bp_relayers::RewardsAccountParams;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::parameter_types;
 use scale_info::TypeInfo;
-use xcm::VersionedLocation;
+use xcm::opaque::latest::Location;
+use snowbridge_core::reward::NoOpReward;
+use crate::bridge_to_ethereum_config::EthereumGlobalLocation;
+use crate::bridge_to_ethereum_config::AssetHubXCMFee;
+use crate::xcm_config::XcmConfig;
+use xcm_executor::XcmExecutor;
+use crate::RuntimeCall;
+use crate::XcmRouter;
+use crate::bridge_to_ethereum_config::InboundQueueLocation;
+use testnet_parachains_constants::westend::snowbridge::EthereumLocation;
+use crate::bridge_to_ethereum_config::AssetHubLocation;
 
 parameter_types! {
 	pub storage RequiredStakeForStakeAndSlash: Balance = 1_000_000;
@@ -54,7 +64,7 @@ impl From<RewardsAccountParams<LegacyLaneId>> for BridgeReward {
 pub struct BridgeRewardPayer;
 impl bp_relayers::PaymentProcedure<AccountId, BridgeReward, u128> for BridgeRewardPayer {
 	type Error = sp_runtime::DispatchError;
-	type AlternativeBeneficiary = VersionedLocation;
+	type AlternativeBeneficiary = Location;
 
 	fn pay_reward(
 		relayer: &AccountId,
@@ -77,8 +87,27 @@ impl bp_relayers::PaymentProcedure<AccountId, BridgeReward, u128> for BridgeRewa
 					relayer, lane_params, reward, None,
 				)
 			},
-			BridgeReward::Snowbridge =>
-				Err(sp_runtime::DispatchError::Other("Not implemented yet, check also `fn prepare_rewards_account` to return `alternative_beneficiary`!")),
+			BridgeReward::Snowbridge => {
+				frame_support::ensure!(
+					alternative_beneficiary.is_some(),
+					Self::Error::Other("`alternative_beneficiary` should be specified for `Snowbridge` rewards!")
+				);
+				snowbridge_core::reward::PayAccountOnLocation::<
+					AccountId,
+					u128,
+					NoOpReward,
+					EthereumLocation,
+					//EthereumGlobalLocation,
+					AssetHubLocation,
+					AssetHubXCMFee,
+					InboundQueueLocation,
+					XcmRouter,
+					XcmExecutor<XcmConfig>,
+					RuntimeCall
+				>::pay_reward(
+					relayer, NoOpReward, reward, alternative_beneficiary
+				)
+			} //Relayer, RewardBalance, NoOpReward, EthereumLocation, AssetHubLocation, AssetHubXCMFee, InboundQueueLocation, XcmSender, XcmExecutor, Call
 		}
 	}
 }

@@ -30,6 +30,7 @@ sp-runtime = { workspace = true }
 sp-std = { workspace = true }
 
 snowbridge-beacon-primitives = { workspace = true }
+bp-relayers = { workspace = true }
 
 ethabi = { workspace = true }
 
@@ -40,6 +41,7 @@ xcm-executor = { workspace = true, default-features = true }
 [features]
 default = ["std"]
 std = [
+	"bp-relayers/std",
 	"codec/std",
 	"ethabi/std",
 	"frame-support/std",
