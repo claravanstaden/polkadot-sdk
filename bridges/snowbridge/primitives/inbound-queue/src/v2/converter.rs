@@ -249,6 +249,44 @@ where
 			]
 			.into())
 		},
+		1 => {
+			let dest = Location::new(2,
+									 [
+										 GlobalConsensus(ByGenesis(xcm::latest::ROCOCO_GENESIS_HASH)),
+										 Parachain(1000u32),
+									 ]);
+			let instructions = vec![DepositReserveAsset {
+				assets: Wild(AllCounted(2)),
+				dest,
+				xcm: vec![
+					ExchangeAsset {
+						give: asset_deposit.clone().into(),
+						want: dot_fee.clone().into(),
+						maximal: false,
+					},
+					// Deposit the dot deposit into the bridge sovereign account (where the asset
+					// creation fee will be deducted from)
+					DepositAsset { assets: dot_fee.into(), beneficiary: bridge_owner.into() },
+					// Call to create the asset.
+					Transact {
+						origin_kind: OriginKind::Xcm,
+						fallback_max_weight: None,
+						call: (
+							create_call_index,
+							asset_id,
+							MultiAddress::<[u8; 32], ()>::Id(bridge_owner.into()),
+							MINIMUM_DEPOSIT,
+						)
+							.encode()
+							.into(),
+					},
+					ExpectTransactStatus(MaybeErrorCode::Success),
+				]
+					.into(),
+			},
+			];
+			remote_xcm = instructions.into();
+		}
 		_ => Err(ConvertMessageError::InvalidNetwork),
 	}
 }

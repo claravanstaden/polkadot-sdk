@@ -25,6 +25,10 @@ use emulated_integration_tests_common::{
 	PenpalBTeleportableAssetLocation, RESERVABLE_ASSET_ID, SAFE_XCM_VERSION, USDT_ID,
 };
 use parachains_common::{AccountId, Balance};
+use testnet_parachains_constants::rococo::snowbridge::EthereumNetwork;
+use emulated_integration_tests_common::WETH;
+use snowbridge_inbound_queue_primitives::EthereumLocationsConverterFor;
+use emulated_integration_tests_common::xcm_emulator::ConvertLocation;
 
 pub const PARA_ID: u32 = 1000;
 pub const ED: Balance = testnet_parachains_constants::rococo::currency::EXISTENTIAL_DEPOSIT;
@@ -91,6 +95,43 @@ pub fn genesis() -> Storage {
 					PenpalBTeleportableAssetLocation::get(),
 					PenpalBSiblingSovereignAccount::get(),
 					false,
+					ED,
+				),
+				// Ether
+				(
+					xcm::v5::Location::new(
+						2,
+						[xcm::v5::Junction::GlobalConsensus(EthereumNetwork::get())],
+					),
+					EthereumLocationsConverterFor::<[u8; 32]>::convert_location(
+						&xcm::v5::Location::new(
+							2,
+							[xcm::v5::Junction::GlobalConsensus(EthereumNetwork::get())],
+						),
+					)
+						.unwrap()
+						.into(),
+					true,
+					ED,
+				),
+				// Weth
+				(
+					xcm::v5::Location::new(
+						2,
+						[
+							xcm::v5::Junction::GlobalConsensus(EthereumNetwork::get()),
+							xcm::v5::Junction::AccountKey20 { network: None, key: WETH.into() },
+						],
+					),
+					EthereumLocationsConverterFor::<[u8; 32]>::convert_location(
+						&xcm::v5::Location::new(
+							2,
+							[xcm::v5::Junction::GlobalConsensus(EthereumNetwork::get())],
+						),
+					)
+						.unwrap()
+						.into(),
+					true,
 					ED,
 				),
 			],

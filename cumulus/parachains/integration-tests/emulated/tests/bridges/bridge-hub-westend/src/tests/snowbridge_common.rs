@@ -334,6 +334,13 @@ pub(crate) fn set_up_eth_and_dot_pool() {
 	create_pool_with_native_on!(AssetHubWestend, eth_location(), true, ethereum_sovereign.clone());
 }
 
+pub(crate) fn set_up_eth_and_dot_pool_on_rococo() {
+	// We create a pool between WND and WETH in AssetHub to support paying for fees with WETH.
+	let ethereum_sovereign = snowbridge_sovereign();
+	AssetHubRococo::fund_accounts(vec![(ethereum_sovereign.clone(), INITIAL_FUND)]);
+	create_pool_with_native_on!(AssetHubRococo, eth_location(), true, ethereum_sovereign.clone());
+}
+
 pub(crate) fn set_up_eth_and_dot_pool_on_penpal() {
 	let ethereum_sovereign = snowbridge_sovereign();
 	AssetHubWestend::fund_accounts(vec![(ethereum_sovereign.clone(), INITIAL_FUND)]);
