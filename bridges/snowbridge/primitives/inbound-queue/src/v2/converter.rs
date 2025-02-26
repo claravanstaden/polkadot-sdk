@@ -251,16 +251,17 @@ where
 		},
 		1 => {
 			let dest = Location::new(2,
-									 [
-										 GlobalConsensus(ByGenesis(xcm::latest::ROCOCO_GENESIS_HASH)),
-										 Parachain(1000u32),
-									 ]);
-			let instructions = vec![DepositReserveAsset {
+			 [
+				 GlobalConsensus(ByGenesis(xcm::latest::ROCOCO_GENESIS_HASH)),
+				 Parachain(1000u32),
+			 ]);
+			Ok(vec![
+				DepositReserveAsset {
 				assets: Wild(AllCounted(2)),
 				dest,
 				xcm: vec![
 					ExchangeAsset {
-						give: asset_deposit.clone().into(),
+						give: eth_asset.clone().into(),
 						want: dot_fee.clone().into(),
 						maximal: false,
 					},
@@ -284,8 +285,7 @@ where
 				]
 					.into(),
 			},
-			];
-			remote_xcm = instructions.into();
+			].into())
 		}
 		_ => Err(ConvertMessageError::InvalidNetwork),
 	}

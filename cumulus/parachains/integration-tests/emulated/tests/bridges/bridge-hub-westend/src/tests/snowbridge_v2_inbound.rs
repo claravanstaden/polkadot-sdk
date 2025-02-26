@@ -41,6 +41,7 @@ use sp_core::{H160, H256};
 use sp_runtime::MultiAddress;
 use xcm::opaque::latest::AssetTransferFilter::ReserveDeposit;
 use xcm_executor::traits::ConvertLocation;
+use crate::tests::snowbridge_common::set_up_eth_and_dot_pool_on_rococo;
 
 const TOKEN_AMOUNT: u128 = 100_000_000_000;
 
@@ -83,7 +84,7 @@ fn register_token_on_rococo_v2() {
 			nonce: 1,
 			origin,
 			assets: vec![],
-			xcm: XcmCommand::TokenRegistration { token, network: 1 },
+			xcm: XcmPayload::CreateAsset { token, network: 1 },
 			claimer: Some(claimer_bytes),
 			// Used to pay the asset creation deposit.
 			value: 9_000_000_000_000u128,
