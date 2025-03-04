@@ -219,7 +219,9 @@ pub mod pallet {
 
 			// submit message for verification
 			T::Verifier::verify(&event.event_log, &event.proof)
-				.map_err(|e| Error::<T>::Verification(e))?;
+				.map_err(|e| {
+					Error::<T>::Verification(e)
+				})?;
 
 			// Decode event log into a bridge message
 			let message =

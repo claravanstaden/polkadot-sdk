@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
 use super::*;
 
-use crate::Pallet as InboundQueue;
+use crate::Pallet as InboundQueueV2;
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
@@ -25,7 +25,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			assert_ok!(InboundQueue::<T>::submit(
+			assert_ok!(InboundQueueV2::<T>::submit(
 				RawOrigin::Signed(caller.clone()).into(),
 				Box::new(create_message.event),
 			));

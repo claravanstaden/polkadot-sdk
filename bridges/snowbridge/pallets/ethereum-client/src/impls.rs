@@ -18,15 +18,22 @@ impl<T: Config> Verifier for Pallet<T> {
 	/// is also sent with the message, to check if the header is an ancestor of a finalized
 	/// header.
 	fn verify(event_log: &Log, proof: &Proof) -> Result<(), VerificationError> {
+		log::info!(target: LOG_TARGET,"💫 verifying execution proof");
 		Self::verify_execution_proof(&proof.execution_proof)
 			.map_err(|e| InvalidExecutionProof(e.into()))?;
 
+		log::info!(target: LOG_TARGET,"💫 execution proof passed");
 		let receipt = Self::verify_receipt_inclusion(
 			proof.execution_proof.execution_header.receipts_root(),
 			&proof.receipt_proof.1,
 		)?;
 
+
+		log::info!(target: LOG_TARGET,"💫 receipt inclusion passed");
+
 		event_log.validate().map_err(|_| InvalidLog)?;
+
+		log::info!(target: LOG_TARGET,"💫 event log validated");
 
 		// Convert snowbridge_core::inbound::Log to snowbridge_ethereum::Log.
 		let event_log = snowbridge_ethereum::Log {
@@ -42,6 +49,8 @@ impl<T: Config> Verifier for Pallet<T> {
 			);
 			return Err(LogNotFound)
 		}
+
+		log::info!(target: LOG_TARGET,"💫 contains log");
 
 		Ok(())
 	}
@@ -73,19 +82,25 @@ impl<T: Config> Pallet<T> {
 	/// chain.The beacon header containing the execution header is sent, plus the execution header,
 	/// along with a proof that the execution header is rooted in the beacon header body.
 	pub(crate) fn verify_execution_proof(execution_proof: &ExecutionProof) -> DispatchResult {
+		log::info!(target: LOG_TARGET,"💫 checking bootstrapped");
 		let latest_finalized_state =
 			FinalizedBeaconState::<T>::get(LatestFinalizedBlockRoot::<T>::get())
 				.ok_or(Error::<T>::NotBootstrapped)?;
 		// Checks that the header is an ancestor of a finalized header, using slot number.
+		log::info!(target: LOG_TARGET,"💫 is bootstrapped");
 		ensure!(
 			execution_proof.header.slot <= latest_finalized_state.slot,
 			Error::<T>::HeaderNotFinalized
 		);
 
+		log::info!(target: LOG_TARGET,"💫 is finalized");
+
 		let beacon_block_root: H256 = execution_proof
 			.header
 			.hash_tree_root()
 			.map_err(|_| Error::<T>::HeaderHashTreeRootFailed)?;
+
+		log::info!(target: LOG_TARGET,"💫 hash tree root");
 
 		match &execution_proof.ancestry_proof {
 			Some(proof) => {
@@ -108,6 +123,8 @@ impl<T: Config> Pallet<T> {
 			},
 		}
 
+		log::info!(target: LOG_TARGET,"💫 ancestry proof");
+
 		// Gets the hash tree root of the execution header, in preparation for the execution
 		// header proof (used to check that the execution header is rooted in the beacon
 		// header body.
@@ -115,6 +132,8 @@ impl<T: Config> Pallet<T> {
 			.execution_header
 			.hash_tree_root()
 			.map_err(|_| Error::<T>::BlockBodyHashTreeRootFailed)?;
+
+		log::info!(target: LOG_TARGET,"💫 block body hash");
 
 		let execution_header_gindex = Self::execution_header_gindex();
 		ensure!(
@@ -127,6 +146,8 @@ impl<T: Config> Pallet<T> {
 			),
 			Error::<T>::InvalidExecutionHeaderProof
 		);
+
+		log::info!(target: LOG_TARGET,"💫 merkle branch");
 		Ok(())
 	}
 
