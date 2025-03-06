@@ -4,14 +4,11 @@
 //!
 //! # Extrinsics
 //!
-//! ## Agents
+//! ## Governance
 //!
-//! Agents are smart contracts on Ethereum that act as proxies for consensus systems on Polkadot
-//! networks.
+//! * [`Call::upgrade`]: Upgrade the Gateway contract on Ethereum.
+//! * [`Call::set_operating_mode`]: Set the operating mode of the Gateway contract
 //!
-//! * [`Call::create_agent`]: Create agent for any kind of sovereign location on Polkadot network,
-//!   can be a sibling parachain, pallet or smart contract or signed account in that parachain, etc
-
 //! ## Polkadot-native tokens on Ethereum
 //!
 //! Tokens deposited on AssetHub pallet can be bridged to Ethereum as wrapped ERC20 tokens. As a
@@ -52,7 +49,6 @@ use frame_support::traits::OriginTrait;
 pub use pallet::*;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-
 #[cfg(feature = "runtime-benchmarks")]
 pub trait BenchmarkHelper<O>
 where
