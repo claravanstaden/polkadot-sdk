@@ -94,13 +94,18 @@ impl<T: Config> Pallet<T> {
 		);
 
 		log::info!(target: LOG_TARGET,"💫 is finalized");
+		log::info!(target: LOG_TARGET,"💫 header.slot {:?}", execution_proof.header.clone().slot);
+		log::info!(target: LOG_TARGET,"💫 header.proposer_index {:?}", execution_proof.header.clone().proposer_index);
+		log::info!(target: LOG_TARGET,"💫 header.parent_root {:?}", execution_proof.header.clone().parent_root);
+		log::info!(target: LOG_TARGET,"💫 header.state_root {:?}", execution_proof.header.clone().state_root);
+		log::info!(target: LOG_TARGET,"💫 header.body_root {:?}", execution_proof.header.clone().body_root);
 
 		let beacon_block_root: H256 = execution_proof
 			.header
 			.hash_tree_root()
 			.map_err(|_| Error::<T>::HeaderHashTreeRootFailed)?;
 
-		log::info!(target: LOG_TARGET,"💫 hash tree root");
+		log::info!(target: LOG_TARGET,"💫 hash tree root: {:?}", beacon_block_root);
 
 		match &execution_proof.ancestry_proof {
 			Some(proof) => {
@@ -133,7 +138,7 @@ impl<T: Config> Pallet<T> {
 			.hash_tree_root()
 			.map_err(|_| Error::<T>::BlockBodyHashTreeRootFailed)?;
 
-		log::info!(target: LOG_TARGET,"💫 block body hash");
+		log::info!(target: LOG_TARGET,"💫 block body hash: {:?}", execution_header_root);
 
 		let execution_header_gindex = Self::execution_header_gindex();
 		ensure!(
@@ -160,11 +165,12 @@ impl<T: Config> Pallet<T> {
 		block_root_proof: &[H256],
 		finalized_block_root: H256,
 	) -> DispatchResult {
+		log::info!(target: LOG_TARGET,"💫 checking header is stored: {:?}", finalized_block_root);
 		let state = <FinalizedBeaconState<T>>::get(finalized_block_root)
 			.ok_or(Error::<T>::ExpectedFinalizedHeaderNotStored)?;
-
+		log::info!(target: LOG_TARGET,"💫 header is stored");
 		ensure!(block_slot < state.slot, Error::<T>::HeaderNotFinalized);
-
+		log::info!(target: LOG_TARGET,"💫 header is finalized");
 		let index_in_array = block_slot % (SLOTS_PER_HISTORICAL_ROOT as u64);
 		let leaf_index = (SLOTS_PER_HISTORICAL_ROOT as u64) + index_in_array;
 
@@ -178,6 +184,7 @@ impl<T: Config> Pallet<T> {
 			),
 			Error::<T>::InvalidAncestryMerkleProof
 		);
+		log::info!(target: LOG_TARGET,"💫 ancestry merkle proof passed");
 
 		Ok(())
 	}

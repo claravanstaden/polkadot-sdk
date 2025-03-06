@@ -314,10 +314,20 @@ pub mod pallet {
 
 			let commands: Vec<OutboundCommandWrapper> = commands
 				.into_iter()
-				.map(|command| CommandWrapper {
+				.map(|command| OutboundCommandWrapper {
 					kind: command.index(),
 					gas: T::GasMeter::maximum_dispatch_gas_used_at_most(&command),
-					payload: Bytes::from(command.abi_encode()),
+					payload: command.abi_encode(),
+				})
+				.collect();
+
+			let abi_commands: Vec<CommandWrapper> = commands
+				.clone()
+				.into_iter()
+				.map(|command| CommandWrapper {
+					kind: command.kind,
+					gas: command.gas,
+					payload: Bytes::from(command.payload),
 				})
 				.collect();
 			let committed_message = OutboundMessageWrapper {
@@ -332,18 +342,7 @@ pub mod pallet {
 			let outbound_message = OutboundMessage {
 				origin,
 				nonce,
-				commands: message
-					.commands
-					.clone()
-					.into_iter()
-					.map(|command| OutboundCommandWrapper {
-						kind: command.index(),
-						gas: T::GasMeter::maximum_dispatch_gas_used_at_most(&command),
-						payload: command.abi_encode(),
-					})
-					.collect::<Vec<_>>()
-					.try_into()
-					.map_err(|_| Corrupt)?,
+				commands: commands.try_into().map_err(|_| Corrupt)?,
 			};
 			Messages::<T>::append(Box::new(outbound_message));
 

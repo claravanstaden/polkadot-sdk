@@ -312,12 +312,14 @@ pub mod benchmark_helpers {
 
 	impl<T: snowbridge_pallet_ethereum_client::Config> BenchmarkHelper<T> for Runtime {
 		fn initialize_storage(beacon_header: BeaconHeader, block_roots_root: H256) {
+			tracing::info!(target: "xcm::initialize_storage", ?beacon_header, "storing finalized header v1");
 			EthereumBeaconClient::store_finalized_header(beacon_header, block_roots_root).unwrap();
 		}
 	}
 
 	impl<T: snowbridge_pallet_ethereum_client::Config> BenchmarkHelperV2<T> for Runtime {
 		fn initialize_storage(beacon_header: BeaconHeader, block_roots_root: H256) {
+			tracing::info!(target: "xcm::initialize_storage", ?beacon_header, "storing finalized header v2");
 			EthereumBeaconClient::store_finalized_header(beacon_header, block_roots_root).unwrap();
 		}
 	}
