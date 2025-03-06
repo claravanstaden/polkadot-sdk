@@ -35,6 +35,18 @@ sol! {
 			address token;
 			uint8 network;
 		}
+		struct XcmTransfer {
+			bytes destination;
+			DestinationFee destination_fee;
+		}
+		struct DestinationFee {
+			uint8 kind;
+			bytes data;
+		}
+		struct SwapEther {
+			uint128 in_amount;
+			uint128 data;
+		}
 		struct Payload {
 			address origin;
 			EthereumAsset[] assets;
@@ -47,6 +59,23 @@ sol! {
 		event OutboundMessageAccepted(uint64 nonce, Payload payload);
 	}
 }
+
+/**
+enum DestinationFee {
+    // Swap native ether in `message.value`
+    SwapEther {
+        in: amount
+        out: (Location, amount)
+    },
+    // Swap asset in `message.assets`
+    SwapAsset {
+        in: (u8, amount)
+        out: (Location, amount)
+    },
+    // Directly use some amount of an asset in `message.assets`.
+    Asset: (u8, amount),
+}
+**/
 
 impl core::fmt::Debug for IGatewayV2::Payload {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -86,6 +115,44 @@ pub enum XcmPayload {
 	Raw(Vec<u8>),
 	/// A token registration template
 	CreateAsset { token: H160, network: Network },
+	/// A token transfer payload.
+	Transfer(Transfer)
+}
+
+/// A new payload for transferring assets across chains.
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct Transfer {
+	/// The destination where the funds should go.
+	pub destination: Location,
+	/// The fee mechanism required for the transfer.
+	pub destination_fee: DestinationFee,
+	/// The beneficiary who receives the transferred asset.
+	pub beneficiary: Location,
+	/// Optional additional XCM transaction bytes.
+	pub transact: Option<Bytes>,
+}
+
+/// Defines how to obtain the destination fee on AH.
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub enum DestinationFee {
+	/// Swap native ether present in `message.value`.
+	SwapEther {
+		/// The amount of native ether to swap.
+		amount_in: u128,
+		/// The target output: a tuple of destination location and the amount.
+		out: (Location, u128),
+	},
+	/// Swap an asset present in `message.assets`.
+	SwapAsset {
+		/// The asset identifier (e.g. an index or type tag).
+		asset: u8,
+		/// The amount of the asset to swap.
+		amount_in: u128,
+		/// The target output: a tuple of destination location and the amount.
+		out: (Location, u128),
+	},
+	/// Directly use some amount of an asset present in `message.assets`.
+	Asset(u8, u128),
 }
 
 /// Network enum for cross-chain message destination
