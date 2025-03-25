@@ -178,7 +178,7 @@ pub mod pallet {
 		/// Set OperatingMode
 		OperatingModeChanged { mode: BasicOperatingMode },
 		/// Delivery Proof received
-		MessageDeliveryProofReceived { nonce: u64 },
+		MessageDelivered { nonce: u64 },
 	}
 
 	#[pallet::error]
@@ -387,7 +387,7 @@ pub mod pallet {
 
 			<PendingOrders<T>>::remove(nonce);
 
-			Self::deposit_event(Event::MessageDeliveryProofReceived { nonce });
+			Self::deposit_event(Event::MessageDelivered { nonce });
 
 			Ok(())
 		}

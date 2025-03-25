@@ -573,7 +573,7 @@ fn register_token_from_penpal() {
 		assert_expected_events!(
 			BridgeHubWestend,
 			vec![
-				RuntimeEvent::EthereumOutboundQueueV2(snowbridge_pallet_outbound_queue_v2::Event::MessageDeliveryProofReceived { .. }) => {},
+				RuntimeEvent::EthereumOutboundQueueV2(snowbridge_pallet_outbound_queue_v2::Event::MessageDelivered { .. }) => {},
 			]
 		);
 	});
