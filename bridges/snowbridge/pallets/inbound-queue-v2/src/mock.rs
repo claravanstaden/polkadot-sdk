@@ -162,7 +162,7 @@ pub enum BridgeReward {
 }
 
 parameter_types! {
-	pub static RewardAllocated: u128 = 0;
+	pub static RegisteredRewardsCount: u128 = 0;
 }
 
 impl RewardLedger<<mock::Test as frame_system::Config>::AccountId, BridgeReward, u128> for () {
@@ -171,7 +171,7 @@ impl RewardLedger<<mock::Test as frame_system::Config>::AccountId, BridgeReward,
 		_reward: BridgeReward,
 		_reward_balance: u128,
 	) {
-		RewardAllocated::set(RewardAllocated::get().saturating_add(1));
+		RegisteredRewardsCount::set(RegisteredRewardsCount::get().saturating_add(1));
 	}
 }
 

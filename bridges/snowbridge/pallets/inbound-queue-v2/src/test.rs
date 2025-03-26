@@ -38,7 +38,7 @@ fn test_submit_happy_path() {
 			"no message received event emitted."
 		);
 
-		assert_eq!(RewardAllocated::get(), 1, "Relayer reward should have been registered");
+		assert_eq!(RegisteredRewardsCount::get(), 1, "Relayer reward should have been registered");
 	});
 }
 
@@ -341,6 +341,6 @@ fn zero_reward_does_not_register_reward() {
 			}
 		));
 
-		assert_eq!(RewardAllocated::get(), 0, "Zero relayer reward should not be registered");
+		assert_eq!(RegisteredRewardsCount::get(), 0, "Zero relayer reward should not be registered");
 	});
 }
