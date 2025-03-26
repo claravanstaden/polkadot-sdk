@@ -38,7 +38,7 @@ pub enum EthereumSystemFrontendCall {
 #[allow(clippy::large_enum_variant)]
 #[derive(Encode, Decode, Debug, PartialEq, Clone, TypeInfo)]
 pub enum EthereumSystemFrontend {
-	#[codec(index = 80)]
+	#[codec(index = 36)]
 	EthereumSystemFrontend(EthereumSystemFrontendCall),
 }
 
