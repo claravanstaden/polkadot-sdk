@@ -4,7 +4,7 @@ use crate::{mock::*, *};
 use alloy_core::primitives::FixedBytes;
 use codec::Encode;
 use frame_support::{
-	assert_err, assert_noop, assert_ok,
+	assert_err, assert_ok,
 	traits::{Hooks, ProcessMessage, ProcessMessageError},
 	weights::WeightMeter,
 	BoundedVec,
@@ -84,7 +84,7 @@ fn process_message_yields_on_max_messages_per_block() {
 
 		let mut meter = WeightMeter::new();
 
-		assert_noop!(
+		assert_err!(
 			OutboundQueue::process_message(
 				message.encode().as_slice(),
 				origin,
@@ -93,6 +93,18 @@ fn process_message_yields_on_max_messages_per_block() {
 			),
 			ProcessMessageError::Yield
 		);
+		let events = System::events();
+		let last_event = events.last().expect("Expected at least one event").event.clone();
+
+		match last_event {
+			mock::RuntimeEvent::OutboundQueue(Event::MessagePostponed {
+				payload: _,
+				reason: ProcessMessageError::Yield,
+			}) => {},
+			_ => {
+				panic!("Expected Event::MessagePostponed(Yield) but got {:?}", last_event);
+			},
+		}
 	})
 }
 
@@ -122,7 +134,7 @@ fn process_message_fails_on_max_nonce_reached() {
 		match last_event {
 			mock::RuntimeEvent::OutboundQueue(Event::MessageRejected {
 				id: Some(id),
-				payload: Some(_),
+				payload: _,
 				error: ProcessMessageError::Unsupported,
 			}) => {
 				assert_eq!(
@@ -158,13 +170,12 @@ fn process_message_fails_on_overweight_message() {
 		let last_event = events.last().expect("Expected at least one event").event.clone();
 
 		match last_event {
-			mock::RuntimeEvent::OutboundQueue(Event::MessageRejected {
-				id: None,
-				payload: Some(_),
-				error: ProcessMessageError::Overweight(_),
+			mock::RuntimeEvent::OutboundQueue(Event::MessagePostponed {
+				payload: _,
+				reason: ProcessMessageError::Overweight(_),
 			}) => {},
 			_ => {
-				panic!("Expected Event::MessageRejected(Overweight(_)) but got {:?}", last_event);
+				panic!("Expected Event::MessagePostponed(Overweight(_)) but got {:?}", last_event);
 			},
 		}
 	})

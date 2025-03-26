@@ -175,9 +175,17 @@ pub mod pallet {
 			id: Option<H256>,
 			/// The payload of the message. Useful for debugging purposes if the message
 			/// cannot be decoded.
-			payload: Option<Vec<u8>>,
+			payload: Vec<u8>,
 			/// The error that was returned.
 			error: ProcessMessageError,
+		},
+		/// Message was not committed due to being overweight or the current block is full.
+		MessagePostponed {
+			/// The payload of the message. Useful for debugging purposes if the message
+			/// cannot be decoded.
+			payload: Vec<u8>,
+			/// The error that was returned.
+			reason: ProcessMessageError,
 		},
 		/// Some messages have been committed
 		MessagesCommitted {
@@ -309,6 +317,10 @@ pub mod pallet {
 			// This ensures that the weight of `on_finalize` has a known maximum bound.
 			let current_len = MessageLeaves::<T>::decode_len().unwrap_or(0);
 			if current_len >= T::MaxMessagesPerBlock::get() as usize {
+				Self::deposit_event(Event::MessagePostponed {
+					payload: message.to_vec(),
+					reason: Yield,
+				});
 				return Err(Yield);
 			}
 
@@ -319,7 +331,7 @@ pub mod pallet {
 				Message::decode(&mut message).map_err(|_| {
 					Self::deposit_event(Event::MessageRejected {
 						id: None,
-						payload: Some(message.to_vec()),
+						payload: message.to_vec(),
 						error: Corrupt,
 					});
 					Corrupt
@@ -341,7 +353,7 @@ pub mod pallet {
 				commands: commands.clone().try_into().map_err(|_| {
 					Self::deposit_event(Event::MessageRejected {
 						id: Some(id),
-						payload: Some(message.to_vec()),
+						payload: message.to_vec(),
 						error: Corrupt,
 					});
 					Corrupt
@@ -385,7 +397,7 @@ pub mod pallet {
 			Nonce::<T>::set(nonce.checked_add(1).ok_or_else(|| {
 				Self::deposit_event(Event::MessageRejected {
 					id: Some(id),
-					payload: Some(message.to_vec()),
+					payload: message.to_vec(),
 					error: Unsupported,
 				});
 				Unsupported
