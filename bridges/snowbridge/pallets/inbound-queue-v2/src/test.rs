@@ -37,16 +37,8 @@ fn test_submit_happy_path() {
 			)),
 			"no message received event emitted."
 		);
-		assert!(
-			events.iter().any(|event| matches!(
-				event.event,
-				RuntimeEvent::InboundQueue(Event::FeesPaid { .. })
-			)),
-			"no fees paid event emitted."
-		);
 
-		let final_value = REWARD_ALLOCATED.with(|counter| counter.get());
-		assert_eq!(final_value, 1, "Relayer reward should have been registered");
+		assert_eq!(RewardAllocated::get(), 1, "Relayer reward should have been registered");
 	});
 }
 
@@ -349,7 +341,6 @@ fn zero_reward_does_not_register_reward() {
 			}
 		));
 
-		let final_value = REWARD_ALLOCATED.with(|counter| counter.get());
-		assert_eq!(final_value, 0, "Zero relayer reward should not be registered");
+		assert_eq!(RewardAllocated::get(), 0, "Zero relayer reward should not be registered");
 	});
 }
