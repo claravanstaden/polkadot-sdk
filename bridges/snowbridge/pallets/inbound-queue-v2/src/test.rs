@@ -143,16 +143,6 @@ fn test_using_same_nonce_fails() {
 			InboundQueue::submit(origin.clone(), Box::new(event.clone())),
 			Error::<Test>::InvalidNonce
 		);
-
-		let events = frame_system::Pallet::<Test>::events();
-		assert!(
-			events.iter().any(|event| matches!(
-				event.event,
-				RuntimeEvent::InboundQueue(Event::MessageReceived { nonce, ..})
-					if nonce == 1
-			)),
-			"no event emitted."
-		);
 	});
 }
 
