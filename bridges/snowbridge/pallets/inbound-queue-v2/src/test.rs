@@ -143,6 +143,16 @@ fn test_using_same_nonce_fails() {
 			InboundQueue::submit(origin.clone(), Box::new(event.clone())),
 			Error::<Test>::InvalidNonce
 		);
+
+		let events = frame_system::Pallet::<Test>::events();
+		assert!(
+			events.iter().any(|event| matches!(
+				event.event,
+				RuntimeEvent::InboundQueue(Event::MessageReceived { nonce, ..})
+					if nonce == 1
+			)),
+			"no event emitted."
+		);
 	});
 }
 
@@ -210,10 +220,25 @@ fn test_xcm_send_failure() {
 			},
 		};
 
-		assert_noop!(
-			crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())),
-			Error::<Test>::SendFailure
+		assert_ok!(crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())));
+
+		let events = frame_system::Pallet::<Test>::events();
+		assert!(
+			events.iter().any(|event| matches!(
+				&event.event,
+				RuntimeEvent::InboundQueue(Event::MessageProcessingError { nonce, error})
+					if *nonce == 1 && *error == SendError::DestinationUnsupported
+			)),
+			"error event expected but not emitted."
 		);
+
+		assert_eq!(
+			RegisteredRewardsCount::get(),
+			1,
+			"Zero relayer reward should be registered on xcm failure"
+		);
+		let nonce_set = Nonce::<Test>::get(1);
+		assert_eq!(nonce_set, true, "Nonce should be set even though xcm send fails");
 	});
 }
 
@@ -240,10 +265,25 @@ fn test_xcm_send_validate_failure() {
 			},
 		};
 
-		assert_noop!(
-			crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())),
-			Error::<Test>::Unreachable
+		assert_ok!(crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())));
+
+		let events = frame_system::Pallet::<Test>::events();
+		assert!(
+			events.iter().any(|event| matches!(
+				&event.event,
+				RuntimeEvent::InboundQueue(Event::MessageProcessingError { nonce, error})
+					if *nonce == 1 && *error == SendError::NotApplicable
+			)),
+			"error event expected but not emitted."
 		);
+
+		assert_eq!(
+			RegisteredRewardsCount::get(),
+			1,
+			"Zero relayer reward should be registered on xcm failure"
+		);
+		let nonce_set = Nonce::<Test>::get(1);
+		assert_eq!(nonce_set, true, "Nonce should be set even though xcm send fails");
 	});
 }
 
@@ -265,10 +305,24 @@ fn test_xcm_charge_fees_failure() {
 			},
 		};
 
-		assert_noop!(
-			crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())),
-			Error::<Test>::FeesNotMet
+		assert_ok!(crate::test::InboundQueue::submit(origin.clone(), Box::new(event.clone())));
+		let events = frame_system::Pallet::<Test>::events();
+		assert!(
+			events.iter().any(|event| matches!(
+				&event.event,
+				RuntimeEvent::InboundQueue(Event::MessageProcessingError { nonce, error})
+					if *nonce == 1 && *error == SendError::Fees
+			)),
+			"error event expected but not emitted."
 		);
+
+		assert_eq!(
+			RegisteredRewardsCount::get(),
+			1,
+			"Zero relayer reward should be registered on xcm failure"
+		);
+		let nonce_set = Nonce::<Test>::get(1);
+		assert_eq!(nonce_set, true, "Nonce should be set even though xcm send fails");
 	});
 }
 

@@ -117,6 +117,13 @@ pub mod pallet {
 			/// ID of the XCM message which was forwarded to the final destination parachain
 			message_id: [u8; 32],
 		},
+		/// The message was processed but an error was returned.
+		MessageProcessingError {
+			/// The message nonce
+			nonce: u64,
+			/// The error that was returned.
+			error: SendError,
+		},
 		/// Set OperatingMode
 		OperatingModeChanged { mode: BasicOperatingMode },
 	}
@@ -145,30 +152,12 @@ pub mod pallet {
 		InvalidNetwork,
 		/// Pallet is halted
 		Halted,
-		/// The operation required fees to be paid which the initiator could not meet.
-		FeesNotMet,
-		/// The desired destination was unreachable, generally because there is a no way of routing
-		/// to it.
-		Unreachable,
-		/// There was some other issue (i.e. not to do with routing) in sending the message.
-		/// Perhaps a lack of space for buffering the message.
-		SendFailure,
 		/// Invalid foreign ERC-20 token ID
 		InvalidAsset,
 		/// Cannot reachor a foreign ERC-20 asset location.
 		CannotReanchor,
 		/// Message verification error
 		Verification(VerificationError),
-	}
-
-	impl<T: Config> From<SendError> for Error<T> {
-		fn from(e: SendError) -> Self {
-			match e {
-				SendError::Fees => Error::<T>::FeesNotMet,
-				SendError::NotApplicable => Error::<T>::Unreachable,
-				_ => Error::<T>::SendFailure,
-			}
-		}
 	}
 
 	impl<T: Config> From<ConvertMessageError> for Error<T> {
@@ -239,11 +228,11 @@ pub mod pallet {
 
 			// Forward XCM to AH
 			let dest = Location::new(1, [Parachain(T::AssetHubParaId::get())]);
-			let message_id =
-				Self::send_xcm(dest.clone(), &relayer, xcm.clone()).map_err(|error| {
-					tracing::error!(target: LOG_TARGET, ?error, ?dest, ?xcm, "XCM send failed with error");
-					Error::<T>::from(error)
-				})?;
+
+			// Mark message as received
+			Nonce::<T>::set(nonce.into());
+
+			let send_result = Self::send_xcm(dest.clone(), &relayer, xcm.clone());
 
 			// Pay relayer reward
 			if !relayer_fee.is_zero() {
@@ -254,10 +243,17 @@ pub mod pallet {
 				);
 			}
 
-			// Mark message as received
-			Nonce::<T>::set(nonce.into());
-
-			Self::deposit_event(Event::MessageReceived { nonce, message_id });
+			match send_result {
+				Ok(id) => {
+					Self::deposit_event(Event::MessageReceived { nonce, message_id: id });
+				},
+				Err(error) => {
+					Self::deposit_event(Event::MessageProcessingError {
+						nonce,
+						error: error.clone(),
+					});
+				},
+			}
 
 			Ok(())
 		}
