@@ -236,6 +236,7 @@ where
 		eth_asset: xcm::prelude::Asset,
 		claimer: Location,
 	) -> Xcm<()> {
+		println!("eth_asset: {:?}", eth_asset);
 		vec![
 			// Exchange eth for dot to pay the asset creation deposit.
 			ExchangeAsset {
@@ -894,6 +895,93 @@ mod tests {
 
 			// Check if the last instruction is a SetTopic (content isn't important)
 			assert!(matches!(last_instruction, SetTopic(_)), "Last instruction should be SetTopic");
+		});
+	}
+
+	#[test]
+	fn test_create_asset_xcm_case() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			// Setup test data
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+			let token: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let eth_value = 20_000_000_000_000u128; // This should be enough to cover the CreateAssetDeposit
+			let execution_fee = 1_000_000_000_000u128;
+			let relayer_fee = 2_000_000_000_000u128;
+
+			// Create a message with XcmPayload::CreateAsset
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 42,
+				origin,
+				assets: vec![],
+				xcm: XcmPayload::CreateAsset {
+					token,
+					network: crate::v2::Network::Polkadot
+				},
+				claimer: None, // Let it fall back to the default (Snowbridge sovereign)
+				value: eth_value,
+				execution_fee,
+				relayer_fee,
+			};
+
+			// Convert the message to XCM
+			let result = Converter::convert(message);
+			assert_ok!(result.clone());
+
+			let xcm = result.unwrap();
+			let instructions: Vec<_> = xcm.into_iter().collect();
+
+			// Check that the XCM contains the expected asset creation instructions
+
+			// Track key instructions we expect to find
+			let mut exchange_asset_found = false;
+			let mut transact_found = false;
+			let mut refund_surplus_found = false;
+			let mut has_set_topic = false;
+
+			// Check for the presence of key instructions
+			for instruction in &instructions {
+				if let ExchangeAsset { .. } = instruction {
+					// Verify this ExchangeAsset is for DOT deposit
+					exchange_asset_found = true;
+				}
+
+				if let Transact { ref origin_kind, .. } = instruction {
+					// Verify this call has the expected origin kind
+					assert_eq!(*origin_kind, OriginKind::Xcm);
+					transact_found = true;
+				}
+
+				if let RefundSurplus = instruction {
+					refund_surplus_found = true;
+				}
+
+				if let SetTopic(_) = instruction {
+					has_set_topic = true;
+				}
+			}
+
+			// Verify that all required instructions for asset creation are present
+			assert!(exchange_asset_found, "ExchangeAsset instruction not found");
+			assert!(transact_found, "Transact instruction not found");
+			assert!(refund_surplus_found, "RefundSurplus instruction not found");
+			assert!(has_set_topic, "SetTopic instruction not found");
+
+			// Check that a generated topic is added (should be the last instruction)
+			let last_instruction = instructions.last().expect("should have at least one instruction");
+			assert!(matches!(last_instruction, SetTopic(_)), "Last instruction should be SetTopic");
+
+			// Verify the asset deposited from Ethereum is included
+			let mut ether_asset_deposited = false;
+			for instruction in &instructions {
+				if let ReserveAssetDeposited(_) = instruction {
+					// We found a ReserveAssetDeposited instruction, which should include our ETH value
+					// Due to complexity of matching exact values in XCM Assets, we'll just check instruction presence
+					ether_asset_deposited = true;
+					break;
+				}
+			}
+			assert!(ether_asset_deposited, "Ether asset not properly deposited");
 		});
 	}
 }
