@@ -429,8 +429,17 @@ pub mod pallet {
 			let order = <PendingOrders<T>>::get(nonce).ok_or(Error::<T>::InvalidPendingNonce)?;
 
 			if order.fee > 0 {
+				// Use the reward_address from the receipt if valid, otherwise fall back to the
+				// relayer
+				let reward_account = Self::decode_reward_address(&receipt.reward_address)
+					.unwrap_or_else(|| relayer.clone());
+
 				// Pay relayer reward
-				T::RewardPayment::register_reward(&relayer, T::DefaultRewardKind::get(), order.fee);
+				T::RewardPayment::register_reward(
+					&reward_account,
+					T::DefaultRewardKind::get(),
+					order.fee,
+				);
 			}
 
 			<PendingOrders<T>>::remove(nonce);
@@ -438,6 +447,19 @@ pub mod pallet {
 			Self::deposit_event(Event::MessageDelivered { nonce });
 
 			Ok(())
+		}
+
+		/// Helper method to decode a reward address into an AccountId
+		fn decode_reward_address(
+			reward_address: &[u8; 32],
+		) -> Option<<T as frame_system::Config>::AccountId> {
+			// Zero address should fall back to the relayer account
+			if reward_address.iter().all(|&b| b == 0) {
+				return None;
+			}
+
+			// Try to decode the account ID from the reward address
+			<T as frame_system::Config>::AccountId::decode(&mut &reward_address[..]).ok()
 		}
 	}
 }

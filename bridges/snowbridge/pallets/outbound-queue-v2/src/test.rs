@@ -16,6 +16,7 @@ use snowbridge_outbound_queue_primitives::{
 	SendError,
 };
 use sp_core::{hexdisplay::HexDisplay, H256};
+use sp_runtime::AccountId32;
 
 #[test]
 fn submit_messages_and_commit() {
@@ -307,4 +308,55 @@ fn encode_register_pna() {
 	let message_abi_encoded = encode_mock_message(message);
 	println!("{}", HexDisplay::from(&message_abi_encoded));
 	assert_eq!(hex!("000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000124f80000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").to_vec(), message_abi_encoded)
+}
+
+#[test]
+fn process_delivery_receipt_with_reward_address() {
+	new_tester().execute_with(|| {
+		let relayer_account: AccountId32 = AccountId32::new([1u8; 32]);
+		let beneficiary_account: AccountId32 = AccountId32::new([2u8; 32]);
+
+		let nonce = 123u64;
+		let fee = 1000u128;
+
+		let create_order = || PendingOrder { nonce, fee, block_number: System::block_number() };
+
+		<PendingOrders<Test>>::insert(nonce, create_order());
+
+		let mut receipt = DeliveryReceipt {
+			gateway: GatewayAddress::get(),
+			nonce,
+			topic: H256::zero(),
+			success: true,
+			reward_address: [0u8; 32], // Zero address, should fall back to relayer
+		};
+
+		let result1 =
+			OutboundQueue::process_delivery_receipt(relayer_account.clone(), receipt.clone());
+		assert_ok!(result1);
+
+		assert_eq!(RegisteredRewardsCount::get(), 1, "Relayer reward should have been registered");
+		assert_eq!(
+			RegisteredRewardsRelayer::get(),
+			relayer_account.clone(),
+			"Relayer account should have been used to register for rewards"
+		);
+
+		<PendingOrders<Test>>::insert(nonce, create_order());
+
+		let mut beneficiary_bytes = [0u8; 32];
+		beneficiary_bytes.copy_from_slice(&beneficiary_account.encode());
+		receipt.reward_address = beneficiary_bytes; // Then use the reward address
+
+		let result2 =
+			OutboundQueue::process_delivery_receipt(relayer_account.clone(), receipt.clone());
+		assert_ok!(result2);
+
+		assert_eq!(RegisteredRewardsCount::get(), 2, "Relayer reward should have been registered");
+		assert_eq!(
+			RegisteredRewardsRelayer::get(),
+			receipt.reward_address.into(),
+			"Reward address should have been used to register for rewards"
+		);
+	});
 }

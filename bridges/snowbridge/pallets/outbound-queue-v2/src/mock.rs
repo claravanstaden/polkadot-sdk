@@ -119,12 +119,19 @@ pub enum BridgeReward {
 	Snowbridge,
 }
 
+parameter_types! {
+	pub static RegisteredRewardsCount: u128 = 0;
+	pub static RegisteredRewardsRelayer: <mock::Test as frame_system::Config>::AccountId = [0u8; 32].into();
+}
+
 impl RewardLedger<<mock::Test as frame_system::Config>::AccountId, BridgeReward, u128> for () {
 	fn register_reward(
-		_relayer: &<mock::Test as frame_system::Config>::AccountId,
+		relayer: &<mock::Test as frame_system::Config>::AccountId,
 		_reward: BridgeReward,
 		_reward_balance: u128,
 	) {
+		RegisteredRewardsCount::set(RegisteredRewardsCount::get().saturating_add(1));
+		RegisteredRewardsRelayer::set(relayer.clone());
 	}
 }
 
