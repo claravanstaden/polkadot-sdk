@@ -5,13 +5,12 @@
 use super::{message::*, traits::*};
 use crate::{v2::LOG_TARGET, CallIndex, EthereumLocationsConverterFor};
 use codec::{Decode, DecodeLimit, Encode};
-use core::marker::PhantomData;
 use frame_support::ensure;
 use snowbridge_core::TokenId;
-use sp_core::{Get, RuntimeDebug, H160};
+use sp_core::{Get, RuntimeDebug, H160, H256};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{traits::MaybeEquivalence, MultiAddress};
-use sp_std::prelude::*;
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 use xcm::{
 	prelude::{Junction::*, *},
 	MAX_XCM_DECODE_DEPTH,
@@ -134,33 +133,29 @@ where
 			assets.push(AssetTransfer::ReserveDeposit(remaining_ether_asset));
 		}
 
-		for asset in &message.assets {
-			match asset {
-				EthereumAsset::NativeTokenERC20 { token_id, value } => {
-					ensure!(*token_id != H160::zero(), ConvertMessageError::InvalidAsset);
-					let token_location: Location = Location::new(
-						2,
-						[
-							GlobalConsensus(EthereumNetwork::get()),
-							AccountKey20 { network: None, key: (*token_id).into() },
-						],
-					);
-					let asset: Asset = (token_location, *value).into();
-					assets.push(AssetTransfer::ReserveDeposit(asset));
-				},
-				EthereumAsset::ForeignTokenERC20 { token_id, value } => {
-					let asset_loc = ConvertAssetId::convert(&token_id)
-						.ok_or(ConvertMessageError::InvalidAsset)?;
-					let reanchored_asset_loc = asset_loc
-						.reanchored(
-							&GlobalAssetHubLocation::get(),
-							&EthereumUniversalLocation::get(),
-						)
-						.map_err(|_| ConvertMessageError::CannotReanchor)?;
-					let asset: Asset = (reanchored_asset_loc, *value).into();
-					assets.push(AssetTransfer::ReserveWithdraw(asset));
-				},
-			}
+		// Deduplicate assets and aggregate their values
+		let (native_tokens, foreign_tokens) = Self::deduplicate_assets(&message.assets)?;
+
+		for (token_id, total_value) in native_tokens {
+			let token_location: Location = Location::new(
+				2,
+				[
+					GlobalConsensus(EthereumNetwork::get()),
+					AccountKey20 { network: None, key: token_id.into() },
+				],
+			);
+			let asset: Asset = (token_location, total_value).into();
+			assets.push(AssetTransfer::ReserveDeposit(asset));
+		}
+
+		for (token_id, total_value) in foreign_tokens {
+			let asset_loc =
+				ConvertAssetId::convert(&token_id).ok_or(ConvertMessageError::InvalidAsset)?;
+			let reanchored_asset_loc = asset_loc
+				.reanchored(&GlobalAssetHubLocation::get(), &EthereumUniversalLocation::get())
+				.map_err(|_| ConvertMessageError::CannotReanchor)?;
+			let asset: Asset = (reanchored_asset_loc, total_value).into();
+			assets.push(AssetTransfer::ReserveWithdraw(asset));
 		}
 
 		// Add SetTopic instruction if not already present as the last instruction
@@ -264,6 +259,40 @@ where
 			DepositAsset { assets: Wild(AllCounted(2)), beneficiary: claimer },
 		]
 		.into()
+	}
+
+	/// Deduplicate assets and aggregate their values by token ID.
+	/// Returns maps of token IDs to their aggregated values.
+	fn deduplicate_assets(
+		assets: &Vec<EthereumAsset>,
+	) -> Result<(BTreeMap<H160, u128>, BTreeMap<H256, u128>), ConvertMessageError> {
+		// Track token values by token ID for each type to merge duplicates
+		let mut native_token_values: BTreeMap<H160, u128> = BTreeMap::new();
+		let mut foreign_token_values: BTreeMap<H256, u128> = BTreeMap::new();
+
+		// Aggregate all token values by token ID
+		for asset in assets {
+			match asset {
+				EthereumAsset::NativeTokenERC20 { token_id, value } => {
+					ensure!(*token_id != H160::zero(), ConvertMessageError::InvalidAsset);
+
+					// Add value to existing total or insert new entry
+					native_token_values
+						.entry(*token_id)
+						.and_modify(|total| *total = total.saturating_add(*value))
+						.or_insert(*value);
+				},
+				EthereumAsset::ForeignTokenERC20 { token_id, value } => {
+					// Add value to existing total or insert new entry
+					foreign_token_values
+						.entry(*token_id)
+						.and_modify(|total| *total = total.saturating_add(*value))
+						.or_insert(*value);
+				},
+			}
+		}
+
+		Ok((native_token_values, foreign_token_values))
 	}
 
 	/// Parse and (non-strictly) decode `raw` XCM bytes into a `Xcm<()>`.
@@ -894,6 +923,383 @@ mod tests {
 
 			// Check if the last instruction is a SetTopic (content isn't important)
 			assert!(matches!(last_instruction, SetTopic(_)), "Last instruction should be SetTopic");
+		});
+	}
+
+	#[test]
+	fn message_with_duplicate_assets_gets_deduplicated() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Create identical native tokens
+			let native_token_id: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let token_value = 3_000_000_000_000u128;
+
+			// Create duplicate assets - same token and value
+			let assets = vec![
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value },
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value },
+			];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 6_000_000_000_000u128;
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			let mut reserve_deposit_assets = 0;
+			let mut reserve_withdraw_assets = 0;
+
+			for asset in &prepared.assets {
+				match asset {
+					AssetTransfer::ReserveDeposit(_) => reserve_deposit_assets += 1,
+					AssetTransfer::ReserveWithdraw(_) => reserve_withdraw_assets += 1,
+				}
+			}
+
+			// There should be exactly 2 assets:
+			// 1. The asset for remaining ether (from message.value)
+			// 2. One deduplicated native token ERC20 asset (new deduplication based on token_id)
+			assert_eq!(
+				prepared.assets.len(),
+				2,
+				"Message should have 2 assets after deduplication"
+			);
+			assert_eq!(reserve_deposit_assets, 2, "Should have two ReserveDeposit assets");
+			assert_eq!(reserve_withdraw_assets, 0, "Should have no ReserveWithdraw assets");
+		});
+	}
+
+	#[test]
+	fn deduplication_preserves_different_assets() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Create different tokens
+			let native_token_id_1: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let native_token_id_2: H160 = hex!("6615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into(); // Different address
+			let foreign_token_id: H256 =
+				hex!("37a6c666da38711a963d938eafdd09314fd3f95a96a3baffb55f26560f4ecdd8").into();
+			let token_value = 3_000_000_000_000u128;
+
+			let assets = vec![
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id_1, value: token_value },
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id_2, value: token_value },
+				EthereumAsset::ForeignTokenERC20 { token_id: foreign_token_id, value: token_value },
+			];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 0; // No ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// First prepare the message and check the deduplication
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Extract the asset transfers to check deduplication
+			let mut reserve_deposit_assets = 0;
+			let mut reserve_withdraw_assets = 0;
+
+			for asset in &prepared.assets {
+				match asset {
+					AssetTransfer::ReserveDeposit(_) => reserve_deposit_assets += 1,
+					AssetTransfer::ReserveWithdraw(_) => reserve_withdraw_assets += 1,
+				}
+			}
+
+			// All 3 assets should be preserved since they're different
+			assert_eq!(prepared.assets.len(), 3, "Different assets should be preserved");
+			assert_eq!(reserve_deposit_assets, 2, "Should have two ReserveDeposit assets");
+			assert_eq!(reserve_withdraw_assets, 1, "Should have one ReserveWithdraw asset");
+		});
+	}
+
+	#[test]
+	fn duplicated_assets_with_different_values_are_summed() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Create same token but with different values
+			let native_token_id: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let token_value_1 = 3_000_000_000_000u128;
+			let token_value_2 = 5_000_000_000_000u128; // Different value
+			let expected_total = token_value_1.saturating_add(token_value_2);
+
+			// Create duplicate assets with different values
+			let assets = vec![
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value_1 },
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value_2 },
+			];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 0; // No ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// First prepare the message and check the deduplication
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Only one asset should remain due to token_id-based deduplication
+			assert_eq!(prepared.assets.len(), 1, "Assets should be deduplicated by token_id");
+
+			// Verify there's one deposit asset
+			let deposit_count = prepared
+				.assets
+				.iter()
+				.filter(|a| if let AssetTransfer::ReserveDeposit(_) = a { true } else { false })
+				.count();
+
+			assert_eq!(deposit_count, 1, "Should have one ReserveDeposit asset");
+
+			// Verify the values have been added together
+			match &prepared.assets[0] {
+				AssetTransfer::ReserveDeposit(asset) => {
+					assert_eq!(
+						asset.fun,
+						Fungible(expected_total),
+						"Should sum the values of duplicate assets"
+					);
+				},
+				_ => panic!("Expected ReserveDeposit asset"),
+			}
+		});
+	}
+
+	#[test]
+	fn asset_deduplication_adds_values_correctly() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Create native tokens with duplicates
+			let native_token_id: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let token_value_1 = 3_000_000_000_000u128;
+			let token_value_2 = 5_000_000_000_000u128;
+			let expected_total = token_value_1.saturating_add(token_value_2);
+
+			// Create assets with the same token ID but different values
+			let assets = vec![
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value_1 },
+				EthereumAsset::NativeTokenERC20 { token_id: native_token_id, value: token_value_2 }, // Duplicate ID
+			];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 0; // No ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// Prepare the message
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Should have only one asset after deduplication
+			assert_eq!(prepared.assets.len(), 1, "Should have one asset after deduplication");
+
+			// Extract the asset to verify its value
+			let asset_value = match &prepared.assets[0] {
+				AssetTransfer::ReserveDeposit(asset) => {
+					match asset.fun {
+						Fungible(value) => value,
+						_ => panic!("Expected Fungible asset"),
+					}
+				},
+				_ => panic!("Expected ReserveDeposit asset"),
+			};
+
+			// Check that the asset value is the sum of the duplicate assets
+			assert_eq!(asset_value, expected_total, "Asset value should be the sum of duplicates");
+		});
+	}
+
+	#[test]
+	fn deduplication_with_empty_assets_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Empty assets vector
+			let assets = vec![];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 6_000_000_000_000u128; // Has ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// Prepare the message
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Should have one asset for the ETH value
+			assert_eq!(prepared.assets.len(), 1, "Should have one asset for ETH value");
+
+			// Verify it's a ReserveDeposit asset
+			match &prepared.assets[0] {
+				AssetTransfer::ReserveDeposit(asset) => {
+					assert_eq!(
+						asset.fun,
+						Fungible(value),
+						"Asset value should match message value"
+					);
+				},
+				_ => panic!("Expected ReserveDeposit asset"),
+			}
+		});
+	}
+
+	#[test]
+	fn same_token_id_in_different_asset_types_is_preserved() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Convert H160 to H256 to use the same underlying value for both token types
+			let token_id_h160: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let token_id_bytes = token_id_h160.as_bytes();
+			let mut token_id_h256 = [0u8; 32];
+			// Copy bytes from H160 to first part of H256
+			token_id_h256[0..20].copy_from_slice(token_id_bytes);
+			let token_id_h256: H256 = token_id_h256.into();
+
+			let token_value = 3_000_000_000_000u128;
+
+			// Create assets with same token ID but different types
+			let assets = vec![
+				// Native token - using H160 address
+				EthereumAsset::NativeTokenERC20 { token_id: token_id_h160, value: token_value },
+				// Foreign token - using H256 derived from the same H160 address
+				EthereumAsset::ForeignTokenERC20 { token_id: token_id_h256, value: token_value },
+			];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 0; // No ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// Prepare the message
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Should preserve both assets since they're different types
+			assert_eq!(prepared.assets.len(), 2, "Should preserve both assets of different types");
+
+			// Count assets by type
+			let mut deposit_count = 0;
+			let mut withdraw_count = 0;
+
+			for asset in &prepared.assets {
+				match asset {
+					AssetTransfer::ReserveDeposit(_) => deposit_count += 1,
+					AssetTransfer::ReserveWithdraw(_) => withdraw_count += 1,
+				}
+			}
+
+			// Verify we have one of each type
+			assert_eq!(deposit_count, 1, "Should have one ReserveDeposit asset");
+			assert_eq!(withdraw_count, 1, "Should have one ReserveWithdraw asset");
+		});
+	}
+
+	#[test]
+	fn deduplication_with_zero_eth_value_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let origin: H160 = hex!("29e3b139f4393adda86303fcdaa35f60bb7092bf").into();
+
+			// Create a single asset
+			let native_token_id: H160 = hex!("5615deb798bb3e4dfa0139dfa1b3d433cc23b72f").into();
+			let token_value = 3_000_000_000_000u128;
+
+			let assets = vec![EthereumAsset::NativeTokenERC20 {
+				token_id: native_token_id,
+				value: token_value,
+			}];
+
+			let execution_fee = 1_000_000_000_000u128;
+			let value = 0; // No ETH value
+
+			let message = Message {
+				gateway: H160::zero(),
+				nonce: 0,
+				origin,
+				assets,
+				xcm: XcmPayload::Raw(vec![]),
+				claimer: None,
+				value,
+				execution_fee,
+				relayer_fee: 0,
+			};
+
+			// Prepare the message
+			let prepared = Converter::prepare(message).expect("prepare should succeed");
+
+			// Should only have the one native token asset (no ETH value asset)
+			assert_eq!(prepared.assets.len(), 1, "Should have one asset");
+
+			// Verify it's a ReserveDeposit asset for the token
+			match &prepared.assets[0] {
+				AssetTransfer::ReserveDeposit(asset) => {
+					assert_eq!(
+						asset.fun,
+						Fungible(token_value),
+						"Asset value should match token value"
+					);
+				},
+				_ => panic!("Expected ReserveDeposit asset"),
+			}
 		});
 	}
 }
