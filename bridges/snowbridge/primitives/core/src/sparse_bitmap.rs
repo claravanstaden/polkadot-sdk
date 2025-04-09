@@ -6,7 +6,7 @@ use sp_std::marker::PhantomData;
 /// Sparse bitmap interface.
 pub trait SparseBitmap<BitMap>
 where
-	BitMap: StorageMap<u128, u128, Query = u128>,
+	BitMap: StorageMap<u64, u128, Query = u128>,
 {
 	fn get(index: u64) -> bool;
 	fn set(index: u64);
@@ -17,18 +17,18 @@ pub struct SparseBitmapImpl<BitMap>(PhantomData<BitMap>);
 
 impl<BitMap> SparseBitmapImpl<BitMap>
 where
-	BitMap: StorageMap<u128, u128, Query = u128>,
+	BitMap: StorageMap<u64, u128, Query = u128>,
 {
 	/// Computes the bucket index and the bit mask for a given bit index.
 	/// Each bucket contains 128 bits.
-	fn compute_bucket_and_mask(index: u64) -> (u128, u128) {
-		(u128::from(index) >> 7, 1u128 << (index & 127))
+	fn compute_bucket_and_mask(index: u64) -> (u64, u128) {
+		(index >> 7, 1u128 << (index & 127))
 	}
 }
 
 impl<BitMap> SparseBitmap<BitMap> for SparseBitmapImpl<BitMap>
 where
-	BitMap: StorageMap<u128, u128, Query = u128>,
+	BitMap: StorageMap<u64, u128, Query = u128>,
 {
 	fn get(index: u64) -> bool {
 		// Calculate bucket and mask
@@ -60,7 +60,7 @@ mod tests {
 	use sp_io::TestExternalities;
 	pub struct MockStorageMap;
 
-	impl StorageMapHelper<u128, u128> for MockStorageMap {
+	impl StorageMapHelper<u64, u128> for MockStorageMap {
 		type Query = u128;
 		type Hasher = Twox64Concat;
 		fn pallet_prefix() -> &'static [u8] {
@@ -282,7 +282,7 @@ mod tests {
 				// Verify bucket calculation is as expected
 				assert_eq!(
 					bucket,
-					u128::from(index) >> 7,
+					u64::from(index) >> 7,
 					"Bucket calculation incorrect for {}",
 					index
 				);
