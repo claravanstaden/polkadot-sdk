@@ -3,7 +3,7 @@
 //! Converts messages from Solidity ABI-encoding to XCM
 
 use super::{message::*, traits::*};
-use crate::{v2::LOG_TARGET, CallIndex, EthereumLocationsConverterFor};
+use crate::{v2::LOG_TARGET, CallIndex};
 use codec::{Decode, DecodeLimit, Encode};
 use core::marker::PhantomData;
 use frame_support::ensure;
@@ -16,6 +16,8 @@ use xcm::{
 	prelude::{Junction::*, *},
 	MAX_XCM_DECODE_DEPTH,
 };
+use xcm_builder::ExternalConsensusLocationsConverterFor;
+use xcm_executor::traits::ConvertLocation;
 
 const MINIMUM_DEPOSIT: u128 = 1;
 
@@ -55,6 +57,8 @@ pub struct MessageToXcm<
 	GatewayProxyAddress,
 	EthereumUniversalLocation,
 	GlobalAssetHubLocation,
+	AssetHubUniversalLocation,
+	AccountId,
 > {
 	_phantom: PhantomData<(
 		CreateAssetCall,
@@ -65,6 +69,8 @@ pub struct MessageToXcm<
 		GatewayProxyAddress,
 		EthereumUniversalLocation,
 		GlobalAssetHubLocation,
+		AssetHubUniversalLocation,
+		AccountId,
 	)>,
 }
 
@@ -77,6 +83,8 @@ impl<
 		GatewayProxyAddress,
 		EthereumUniversalLocation,
 		GlobalAssetHubLocation,
+		AssetHubUniversalLocation,
+		AccountId,
 	>
 	MessageToXcm<
 		CreateAssetCall,
@@ -87,6 +95,8 @@ impl<
 		GatewayProxyAddress,
 		EthereumUniversalLocation,
 		GlobalAssetHubLocation,
+		AssetHubUniversalLocation,
+		AccountId,
 	>
 where
 	CreateAssetCall: Get<CallIndex>,
@@ -97,6 +107,8 @@ where
 	GatewayProxyAddress: Get<H160>,
 	EthereumUniversalLocation: Get<InteriorLocation>,
 	GlobalAssetHubLocation: Get<Location>,
+	AssetHubUniversalLocation: Get<InteriorLocation>,
+	AccountId: Into<[u8; 32]>,
 {
 	/// Parse the message into an intermediate form, with all fields decoded
 	/// and prepared.
@@ -183,11 +195,13 @@ where
 	/// Get the bridge owner account ID from the current Ethereum network chain ID.
 	/// Returns an error if the network is not Ethereum.
 	fn bridge_owner() -> Result<[u8; 32], ConvertMessageError> {
-		let chain_id = match EthereumNetwork::get() {
-			NetworkId::Ethereum { chain_id } => chain_id,
-			_ => return Err(ConvertMessageError::InvalidNetwork),
-		};
-		Ok(EthereumLocationsConverterFor::<[u8; 32]>::from_chain_id(&chain_id))
+		let account =
+			ExternalConsensusLocationsConverterFor::<AssetHubUniversalLocation, [u8; 32]>::convert_location(
+				&Location::new(2, [GlobalConsensus(EthereumNetwork::get())]),
+			)
+			.ok_or(ConvertMessageError::CannotReanchor)?;
+
+		Ok(account)
 	}
 
 	/// Construct the remote XCM needed to create a new asset in the `ForeignAssets` pallet
@@ -293,6 +307,8 @@ impl<
 		GatewayProxyAddress,
 		EthereumUniversalLocation,
 		GlobalAssetHubLocation,
+		AssetHubUniversalLocation,
+		AccountId,
 	> ConvertMessage
 	for MessageToXcm<
 		CreateAssetCall,
@@ -303,6 +319,8 @@ impl<
 		GatewayProxyAddress,
 		EthereumUniversalLocation,
 		GlobalAssetHubLocation,
+		AssetHubUniversalLocation,
+		AccountId,
 	>
 where
 	CreateAssetCall: Get<CallIndex>,
@@ -313,6 +331,8 @@ where
 	GatewayProxyAddress: Get<H160>,
 	EthereumUniversalLocation: Get<InteriorLocation>,
 	GlobalAssetHubLocation: Get<Location>,
+	AssetHubUniversalLocation: Get<InteriorLocation>,
+	AccountId: Into<[u8; 32]>,
 {
 	fn convert(message: Message) -> Result<Xcm<()>, ConvertMessageError> {
 		let message = Self::prepare(message)?;
@@ -385,9 +405,10 @@ mod tests {
 		pub const EthereumNetwork: xcm::v5::NetworkId = xcm::v5::NetworkId::Ethereum { chain_id: 11155111 };
 		pub const GatewayAddress: H160 = H160(GATEWAY_ADDRESS);
 		pub InboundQueueLocation: InteriorLocation = [PalletInstance(84)].into();
-		pub UniversalLocation: InteriorLocation =
+		pub EthereumUniversalLocation: InteriorLocation =
 			[GlobalConsensus(ByGenesis(WESTEND_GENESIS_HASH)), Parachain(1002)].into();
 		pub AssetHubFromEthereum: Location = Location::new(1,[GlobalConsensus(ByGenesis(WESTEND_GENESIS_HASH)),Parachain(1000)]);
+		pub AssetHubUniversalLocation: InteriorLocation = [GlobalConsensus(ByGenesis(WESTEND_GENESIS_HASH)),Parachain(1000)].into();
 		pub const CreateAssetCall: [u8;2] = [53, 0];
 		pub const CreateAssetDeposit: u128 = 10_000_000_000u128;
 	}
@@ -419,8 +440,10 @@ mod tests {
 		InboundQueueLocation,
 		MockTokenIdConvert,
 		GatewayAddress,
-		UniversalLocation,
+		EthereumUniversalLocation,
 		AssetHubFromEthereum,
+		AssetHubUniversalLocation,
+		[u8; 32],
 	>;
 
 	type ConverterFailing = MessageToXcm<
@@ -430,8 +453,10 @@ mod tests {
 		InboundQueueLocation,
 		MockFailedTokenConvert,
 		GatewayAddress,
-		UniversalLocation,
+		EthereumUniversalLocation,
 		AssetHubFromEthereum,
+		AssetHubUniversalLocation,
+		[u8; 32],
 	>;
 
 	#[test]
@@ -725,11 +750,14 @@ mod tests {
 			}
 
 			// actual claimer should default to Snowbridge sovereign account
-			let chain_id = match EthereumNetwork::get() {
-				NetworkId::Ethereum { chain_id } => chain_id,
-				_ => 0,
-			};
-			let bridge_owner = EthereumLocationsConverterFor::<[u8; 32]>::from_chain_id(&chain_id);
+			let bridge_owner = ExternalConsensusLocationsConverterFor::<
+				AssetHubUniversalLocation,
+				[u8; 32],
+			>::convert_location(&Location::new(
+				2,
+				[GlobalConsensus(EthereumNetwork::get())],
+			))
+			.unwrap();
 			assert_eq!(
 				actual_claimer,
 				Some(Location::new(0, [AccountId32 { network: None, id: bridge_owner }]))
