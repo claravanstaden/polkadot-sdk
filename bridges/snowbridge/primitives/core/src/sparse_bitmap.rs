@@ -1,5 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2023 Snowfork <hello@snowfork.com>
+
+//! # Sparse Bitmap
+//!
+//! A module that provides an efficient way to track message nonces using a sparse bitmap.
+//!
+//! ## Overview
+//!
+//! The `SparseBitmap` uses a `StorageMap<u64, u128>` to store bit flags for a large range of
+//! nonces. Each key (bucket) in the storage map contains a 128-bit value that can track 128
+//! individual nonces.
+//!
+//! The implementation efficiently maps an u64 index (nonce) to:
+//! 1. A bucket - calculated as `index >> 7` (dividing by 128)
+//! 2. A bit position - calculated as `index & 127` (remainder when dividing by 128)
+//!
+//! ## Example
+//!
+//! For nonce 300:
+//! - Bucket = 300 >> 7 = 2 (third bucket)
+//! - Bit position = 300 & 127 = 44 (45th bit in the bucket)
+//! - Corresponding bit mask = 1 << 44
+//!
+//! This approach allows tracking up to 2^64 nonces while only storing buckets that actually contain
+//! data, making it suitable for sparse sets of nonces across a wide range.
+
 use frame_support::storage::StorageMap;
 use sp_std::marker::PhantomData;
 
@@ -8,7 +33,9 @@ pub trait SparseBitmap<BitMap>
 where
 	BitMap: StorageMap<u64, u128, Query = u128>,
 {
+	/// Get the bool at the provided index.
 	fn get(index: u64) -> bool;
+	/// Set the bool at the given index to true.
 	fn set(index: u64);
 }
 
@@ -30,6 +57,9 @@ impl<BitMap> SparseBitmap<BitMap> for SparseBitmapImpl<BitMap>
 where
 	BitMap: StorageMap<u64, u128, Query = u128>,
 {
+	/// Checks if the bit at the specified index is set.
+	/// Returns `true` if the bit is set, `false` otherwise.
+	/// * `index`: The index (nonce) to check.
 	fn get(index: u64) -> bool {
 		// Calculate bucket and mask
 		let (bucket, mask) = Self::compute_bucket_and_mask(index);
@@ -39,6 +69,9 @@ where
 		bucket_value & mask != 0
 	}
 
+	/// Sets the bit at the specified index.
+	/// This marks the nonce as processed by setting its corresponding bit in the bitmap.
+	/// * `index`: The index (nonce) to set.
 	fn set(index: u64) {
 		// Calculate bucket and mask
 		let (bucket, mask) = Self::compute_bucket_and_mask(index);
