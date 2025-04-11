@@ -228,7 +228,7 @@ pub mod pallet {
 		fn send(origin: H256, command: Command, fee: u128) -> DispatchResult {
 			let mut message = Message {
 				origin,
-				id: sp_io::hashing::blake2_256(&(origin, command, fee).encode()).into(),
+				id: frame_system::unique((origin, command, fee)),
 				fee,
 				commands: BoundedVec::try_from(vec![command]).unwrap(),
 			};
