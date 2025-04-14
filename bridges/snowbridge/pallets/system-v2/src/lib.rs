@@ -179,7 +179,6 @@ pub mod pallet {
 		/// - `sender`: The original sender initiating the call on AH
 		/// - `asset_id`: Location of the asset (relative to this chain)
 		/// - `metadata`: Metadata to include in the instantiated ERC20 contract on Ethereum
-		/// - `fee`: Ether to pay for the execution cost on Ethereum
 		#[pallet::call_index(2)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::register_token())]
 		pub fn register_token(
@@ -228,12 +227,10 @@ pub mod pallet {
 		fn send(origin: H256, command: Command, fee: u128) -> DispatchResult {
 			let mut message = Message {
 				origin,
-				id: Default::default(),
+				id: frame_system::unique((origin, command, fee)),
 				fee,
 				commands: BoundedVec::try_from(vec![command]).unwrap(),
 			};
-			let hash = sp_io::hashing::blake2_256(&message.encode());
-			message.id = hash.into();
 
 			let ticket = <T as pallet::Config>::OutboundQueue::validate(&message)
 				.map_err(|err| Error::<T>::Send(err))?;
