@@ -42,6 +42,8 @@ use frame_support::traits::OriginTrait;
 pub use pallet::*;
 
 pub const LOG_TARGET: &str = "snowbridge-system-frontend";
+pub const MAX_REF_TIME: u64 = 10_000_000_000;
+pub const MAX_PROOF_SIZE: u64 = 10_000;
 
 /// Call indices within BridgeHub runtime for dispatchables within `snowbridge-pallet-system-v2`
 #[allow(clippy::large_enum_variant)]
@@ -206,11 +208,7 @@ pub mod pallet {
 			let dest = T::BridgeHubLocation::get();
 			let call =
 				Self::build_register_token_call(origin_location.clone(), asset_location, metadata)?;
-			let remote_xcm = Self::build_remote_xcm(
-				&call,
-				T::WeightInfo::register_token()
-					.saturating_add(T::BackendWeightInfo::transact_register_token()),
-			);
+			let remote_xcm = Self::build_remote_xcm(&call);
 			let message_id = Self::send_xcm(origin_location, dest.clone(), remote_xcm.clone())
 				.map_err(|error| Error::<T>::from(error))?;
 
@@ -255,10 +253,10 @@ pub mod pallet {
 			Ok(call)
 		}
 
-		fn build_remote_xcm(call: &impl Encode, weight_limit: Weight) -> Xcm<()> {
+		fn build_remote_xcm(call: &impl Encode) -> Xcm<()> {
 			Xcm(vec![
 				DescendOrigin(T::PalletLocation::get()),
-				UnpaidExecution { weight_limit: Limited(weight_limit), check_origin: None },
+				UnpaidExecution { weight_limit: Limited(Weight::from_parts(MAX_REF_TIME, MAX_PROOF_SIZE)), check_origin: None },
 				Transact {
 					origin_kind: OriginKind::Xcm,
 					call: call.encode().into(),
