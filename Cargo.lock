@@ -2620,6 +2620,7 @@ dependencies = [
  "cumulus-pallet-xcmp-queue",
  "emulated-integration-tests-common",
  "frame-support",
+ "hex",
  "hex-literal",
  "pallet-asset-conversion",
  "pallet-assets",

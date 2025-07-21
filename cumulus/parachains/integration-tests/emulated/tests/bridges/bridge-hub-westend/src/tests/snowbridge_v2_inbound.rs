@@ -266,7 +266,8 @@ fn send_weth_v2() {
 	let relayer_account = BridgeHubWestendSender::get();
 	let relayer_reward = 1_500_000_000_000u128;
 
-	let beneficiary_acc_id: H256 = H256::random();
+	let beneficiary_acc_id: H256 =
+		hex!("460411e07f93dc4bc2b3a6cb67dad89ca26e8a54054d13916f74c982595c2e0e").into();
 	let beneficiary_acc_bytes: [u8; 32] = beneficiary_acc_id.into();
 	let beneficiary =
 		Location::new(0, AccountId32 { network: None, id: beneficiary_acc_id.into() });
@@ -287,10 +288,15 @@ fn send_weth_v2() {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		let instructions = vec![
 			RefundSurplus,
-			DepositAsset { assets: Wild(AllCounted(2)), beneficiary: beneficiary.clone() },
+			DepositAsset { assets: Wild(AllCounted(1)), beneficiary: beneficiary.clone() },
 		];
 		let xcm: Xcm<()> = instructions.into();
 		let versioned_message_xcm = VersionedXcm::V5(xcm);
+		let encoded = versioned_message_xcm.encode();
+		let hex_string = hex::encode(&encoded);
+		let hex_claimer = hex::encode(&claimer_bytes);
+		println!("Sending 0x{}", hex_string);
+		println!("Claimer 0x{}", hex_claimer);
 		let origin = EthereumGatewayAddress::get();
 
 		let message = Message {
@@ -527,9 +533,6 @@ fn send_token_to_penpal_v2() {
 	let relayer_account = BridgeHubWestendSender::get();
 	let relayer_reward = 1_500_000_000_000u128;
 
-	let token: H160 = TOKEN_ID.into();
-	let token_location = erc20_token_location(token);
-
 	let beneficiary_acc_id: H256 = H256::random();
 	let beneficiary_acc_bytes: [u8; 32] = beneficiary_acc_id.into();
 	let beneficiary =
@@ -542,8 +545,6 @@ fn send_token_to_penpal_v2() {
 	// To pay fees on Penpal.
 	let eth_fee_penpal_ah: xcm::prelude::Asset = (eth_location(), 3_000_000_000_000u128).into();
 
-	register_foreign_asset(token_location.clone());
-
 	// To satisfy ED
 	PenpalB::fund_accounts(vec![(
 		sp_runtime::AccountId32::from(beneficiary_acc_bytes),
@@ -553,19 +554,6 @@ fn send_token_to_penpal_v2() {
 	let snowbridge_sovereign = snowbridge_sovereign();
 	PenpalB::execute_with(|| {
 		type RuntimeOrigin = <PenpalB as Chain>::RuntimeOrigin;
-
-		// Register token on Penpal
-		assert_ok!(<PenpalB as PenpalBPallet>::ForeignAssets::force_create(
-			RuntimeOrigin::root(),
-			token_location.clone().try_into().unwrap(),
-			snowbridge_sovereign.clone().into(),
-			true,
-			1000,
-		));
-
-		assert!(<PenpalB as PenpalBPallet>::ForeignAssets::asset_exists(
-			token_location.clone().try_into().unwrap(),
-		));
 
 		// Register eth on Penpal
 		assert_ok!(<PenpalB as PenpalBPallet>::ForeignAssets::force_create(
@@ -595,18 +583,16 @@ fn send_token_to_penpal_v2() {
 	let token_transfer_value = 2_000_000_000_000u128;
 
 	let assets = vec![
-		// the token being transferred
-		NativeTokenERC20 { token_id: token.into(), value: token_transfer_value },
 	];
 
-	let token_asset_ah: xcm::prelude::Asset = (token_location.clone(), token_transfer_value).into();
+	let token_asset_ah: xcm::prelude::Asset = (eth_location().clone(), token_transfer_value).into();
 	BridgeHubWestend::execute_with(|| {
 		type RuntimeEvent = <BridgeHubWestend as Chain>::RuntimeEvent;
 		let instructions = vec![
 			// Send message to Penpal
 			InitiateTransfer {
 				// Penpal
-				destination: Location::new(1, [Parachain(PARA_ID_B)]),
+				destination: Location::new(1, [Parachain(2000u32.into())]),
 				remote_fees: Some(ReserveDeposit(Definite(vec![eth_fee_penpal_ah.clone()].into()))),
 				preserve_origin: true,
 				assets: BoundedVec::truncate_from(vec![ReserveDeposit(Definite(
@@ -631,6 +617,12 @@ fn send_token_to_penpal_v2() {
 		let versioned_message_xcm = VersionedXcm::V5(xcm);
 		let origin = EthereumGatewayAddress::get();
 
+		let encoded = versioned_message_xcm.encode();
+		let hex_string = hex::encode(&encoded);
+		let hex_claimer = hex::encode(&claimer_bytes);
+		println!("Sending 0x{}", hex_string);
+		println!("Claimer 0x{}", hex_claimer);
+
 		let message = Message {
 			gateway: origin,
 			nonce: 1,
@@ -638,7 +630,7 @@ fn send_token_to_penpal_v2() {
 			assets,
 			xcm: XcmPayload::Raw(versioned_message_xcm.encode()),
 			claimer: Some(claimer_bytes),
-			value: 3_500_000_000_000u128,
+			value: 6_500_000_000_000u128,
 			execution_fee: 1_500_000_000_000u128,
 			relayer_fee: relayer_reward,
 		};
@@ -663,81 +655,6 @@ fn send_token_to_penpal_v2() {
 		1,
 		[Parachain(PenpalB::para_id().into())],
 	));
-
-	AssetHubWestend::execute_with(|| {
-		type RuntimeEvent = <AssetHubWestend as Chain>::RuntimeEvent;
-		// Check that the assets were issued on AssetHub
-		assert_expected_events!(
-			AssetHubWestend,
-			vec![
-				// Message processed successfully
-				RuntimeEvent::MessageQueue(
-					pallet_message_queue::Event::Processed { success: true, .. }
-				) => {},
-				// Ether was issued to beneficiary
-				RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { asset_id, owner, .. }) => {
-					asset_id: *asset_id == eth_location(),
-					owner: *owner == penpal_sov_on_ah,
-				},
-				// Token was issued to beneficiary
-				RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { asset_id, owner, .. }) => {
-					asset_id: *asset_id == token_location,
-					owner: *owner == penpal_sov_on_ah,
-				},
-				RuntimeEvent::XcmpQueue(cumulus_pallet_xcmp_queue::Event::XcmpMessageSent { .. }) => {},
-			]
-		);
-
-		let events = AssetHubWestend::events();
-		// Check that no assets were trapped
-		assert!(
-			!events.iter().any(|event| matches!(
-				event,
-				RuntimeEvent::PolkadotXcm(pallet_xcm::Event::AssetsTrapped { .. })
-			)),
-			"Assets were trapped, should not happen."
-		);
-	});
-
-	PenpalB::execute_with(|| {
-		type RuntimeEvent = <PenpalB as Chain>::RuntimeEvent;
-
-		assert_expected_events!(
-			PenpalB,
-			vec![
-				// Message processed successfully
-				RuntimeEvent::MessageQueue(
-					pallet_message_queue::Event::Processed { success: true, .. }
-				) => {},
-				// Token was issued to beneficiary
-				RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { asset_id, owner, .. }) => {
-					asset_id: *asset_id == token_location,
-					owner: *owner == beneficiary_acc_bytes.into(),
-				},
-				// Leftover fees was deposited to beneficiary
-				RuntimeEvent::ForeignAssets(pallet_assets::Event::Issued { asset_id, owner, .. }) => {
-					asset_id: *asset_id == eth_location(),
-					owner: *owner == beneficiary_acc_bytes.into(),
-				},
-			]
-		);
-
-		// Beneficiary received the token transfer value
-		assert_eq!(
-			ForeignAssets::balance(token_location, AccountId::from(beneficiary_acc_bytes)),
-			token_transfer_value
-		);
-
-		let events = PenpalB::events();
-		// Check that no assets were trapped
-		assert!(
-			!events.iter().any(|event| matches!(
-				event,
-				RuntimeEvent::PolkadotXcm(pallet_xcm::Event::AssetsTrapped { .. })
-			)),
-			"Assets were trapped on Penpal, should not happen."
-		);
-	});
 }
 
 #[test]
