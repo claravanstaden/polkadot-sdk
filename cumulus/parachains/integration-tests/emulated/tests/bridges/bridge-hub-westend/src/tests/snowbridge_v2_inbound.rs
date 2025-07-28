@@ -543,7 +543,7 @@ fn send_token_to_penpal_v2() {
 	let claimer_bytes = claimer.encode();
 
 	// To pay fees on Penpal.
-	let eth_fee_penpal_ah: xcm::prelude::Asset = (eth_location(), 3_000_000_000_000u128).into();
+	let eth_fee_penpal_ah: xcm::prelude::Asset = (eth_location(), 1_000_000_000_000_000u128).into();
 
 	// To satisfy ED
 	PenpalB::fund_accounts(vec![(
